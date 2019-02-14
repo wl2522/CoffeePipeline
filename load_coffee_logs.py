@@ -26,14 +26,16 @@ client = Client(sdk)
 user = client.user(user_id='190932855')
 
 # Search for the log file by its file name using the Box search API
-log_data = client.search().query(fname,
-                                 result_type='file',
-                                 limit=1,
-                                 file_extensions=['csv'])
+log_search = client.as_user(user).search()
+search_results = log_search.query(fname,
+                                  result_type='file',
+                                  file_extensions=['csv'])
+
+log_id = search_results.next()['id']
 
 # Download the search results
 with open(LOCAL_FNAME, mode='wb') as log_path:
-    log_data.next().download_to(log_path)
+    client.as_user(user).file(log_id).download_to(log_path)
 
 logs = pd.read_csv(LOCAL_FNAME, sep=';')
 logs['Coffee'] = logs['Coffee'].str.replace(' g', '')
