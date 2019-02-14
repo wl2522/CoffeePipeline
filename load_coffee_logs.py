@@ -1,10 +1,13 @@
-import os
+import yaml
 import sqlite3
 import pandas as pd
 from datetime import date
 from boxsdk import Client, JWTAuth
 
-LOCAL_FNAME = 'coffee_guru_log.csv'
+with open('config.yml') as config_file:
+    config = yaml.load(config_file)
+    USER_ID = config['user_id']
+    LOCAL_FNAME = config['local_fname']
 
 # Load the latest log file exported to Box from the coffee.guru app
 fname = 'coffee_guru_log_{}.csv'.format(date.today().strftime('%d%m%Y'))
@@ -16,8 +19,10 @@ fname = 'coffee_guru_log_{}.csv'.format(date.today().strftime('%d%m%Y'))
 #              access_token=''
 #               )
 
+# Authenticate using JWTAuth credentials stored in a JSON file
 sdk = JWTAuth.from_settings_file('166146853_3ktx5mjk_config.json')
 client = Client(sdk)
+user = client.user(user_id='190932855')
 
 # Search for the log file by its file name using the Box search API
 log_data = client.search().query(fname,
