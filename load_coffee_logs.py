@@ -8,6 +8,7 @@ with open('config.yml') as config_file:
     config = yaml.load(config_file)
     USER_ID = config['user_id']
     LOCAL_FNAME = config['local_fname']
+    AUTH_FNAME = config['auth_fname']
 
 # Load the latest log file exported to Box from the coffee.guru app
 fname = 'coffee_guru_log_{}.csv'.format(date.today().strftime('%d%m%Y'))
@@ -20,7 +21,7 @@ fname = 'coffee_guru_log_{}.csv'.format(date.today().strftime('%d%m%Y'))
 #               )
 
 # Authenticate using JWTAuth credentials stored in a JSON file
-sdk = JWTAuth.from_settings_file('166146853_3ktx5mjk_config.json')
+sdk = JWTAuth.from_settings_file(AUTH_FNAME)
 client = Client(sdk)
 user = client.user(user_id='190932855')
 
