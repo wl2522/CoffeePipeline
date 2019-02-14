@@ -4,6 +4,8 @@ import pandas as pd
 from datetime import date
 from boxsdk import Client, JWTAuth
 
+LOCAL_FNAME = 'coffee_guru_log.csv'
+
 # Load the latest log file exported to Box from the coffee.guru app
 fname = 'coffee_guru_log_{}.csv'.format(date.today().strftime('%d%m%Y'))
 
@@ -24,10 +26,10 @@ log_data = client.search().query(fname,
                                  file_extensions=['csv'])
 
 # Download the search results
-with open('coffee_guru_log.csv', mode='wb') as log_path:
+with open(LOCAL_FNAME, mode='wb') as log_path:
     log_data.next().download_to(log_path)
 
-logs = pd.read_csv(fname, sep=';')
+logs = pd.read_csv(LOCAL_FNAME, sep=';')
 logs['Coffee'] = logs['Coffee'].str.replace(' g', '')
 
 # Split the "Note" column into separate columns on the "/" delimiter
