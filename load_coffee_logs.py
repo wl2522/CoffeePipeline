@@ -22,9 +22,9 @@ search_results = log_search.query(fname,
                                   result_type='file',
                                   file_extensions=['csv'])
 
+# Download the search results using the log file ID
 log_id = search_results.next()['id']
 
-# Download the search results
 with open(config['local_fname'], mode='wb') as log_path:
     client.as_user(user).file(log_id).download_to(log_path)
 
