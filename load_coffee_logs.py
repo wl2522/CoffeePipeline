@@ -34,8 +34,8 @@ logs['Coffee'] = logs['Coffee'].str.replace(' g', '')
 # Split the "Note" column into separate columns on the "/" delimiter
 notes = logs['Note']
 notes = notes.str.replace('(Bean:)|(Grind:)|(Flavor:)|(Balance:)', '')
-notes = notes.str.split('/', expand=True)
-notes = notes.replace(to_replace=r'\s{2,}', value='', regex=True)
+notes = notes.str.split(r'\s*\/\s*', expand=True)
+notes = notes.replace(to_replace=r'\s{2,}|^\s|\s$', value='', regex=True)
 notes.columns = ['Bean', 'Grind', 'Flavor', 'Balance']
 logs = logs.drop('Note', axis=1)
 logs = pd.concat([logs, notes], axis=1)
