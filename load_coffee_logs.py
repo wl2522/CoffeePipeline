@@ -14,7 +14,7 @@ fname = '{}_{}.csv'.format(config['local_fname'],
 # Authenticate using JWTAuth credentials stored in a JSON file
 sdk = JWTAuth.from_settings_file(config['auth_fname'])
 client = Client(sdk)
-user = client.user(user_id=str(config['user_id']))
+user = client.user(user_id=str(config['app_user_id']))
 
 # Search for the log file by its file name using the Box search API
 log_search = client.as_user(user).search()
