@@ -1,11 +1,11 @@
-import yaml
 import sqlite3
 import pandas as pd
 from datetime import date
+from yaml import load, SafeLoader
 from boxsdk import Client, JWTAuth
 
 with open('config.yml') as config_file:
-    config = yaml.load(config_file)
+    config = load(config_file, Loader=SafeLoader)
 
 # Load the latest log file exported to Box from the coffee.guru app
 fname = '{}_{}.csv'.format(config['local_fname'],
