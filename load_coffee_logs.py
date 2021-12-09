@@ -41,7 +41,7 @@ logs = logs.drop('Note', axis=1)
 logs = pd.concat([logs, notes], axis=1)
 logs.to_csv(config['local_fname'], index=False)
 
-conn = sqlite3.connect('coffee_guru.db')
+conn = sqlite3.connect(config['db_name'])
 
 with open(config['create_script']) as create_statement:
     conn.executescript(create_statement.read())
