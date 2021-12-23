@@ -2,3 +2,5 @@
 *.csv
 *.db
 *.yml
+*.log
+*pylint.d
