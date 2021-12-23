@@ -1,3 +1,4 @@
+"""Data pipeline for inserting coffee brewing logs into a SQLite3 database."""
 import logging
 import sys
 import json
