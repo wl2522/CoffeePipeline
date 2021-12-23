@@ -5,6 +5,7 @@ import atexit
 import sqlite3
 import traceback
 import pandas as pd
+import requests
 from yaml import load, SafeLoader
 from boxsdk import Client, JWTAuth
 from boxsdk.exception import BoxAPIException
@@ -12,6 +13,10 @@ from boxsdk.exception import BoxAPIException
 
 with open('config.yml') as config_file:
     config = load(config_file, Loader=SafeLoader)
+
+SLACK_URL = 'https://hooks.slack.com/services/' + config['slack_webhook']
+DATESTAMP = pd.to_datetime('now', utc=True
+                           ).tz_convert('EST').strftime('%Y-%m-%d %I:%M%p')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -41,6 +46,18 @@ def catch_exception(err_type, value, trace):
 
     # Extract the error message from the exception traceback
     error_msg = traceback.format_exception_only(err_type, value)[0]
+
+    fail_notif = {"status": "FAIL",
+                  "message": f"Failed to update {config['db_name']}!",
+                  "error": error_msg.replace('\n', '')
+                  }
+    fail_msg = f'"{DATESTAMP}": `{str(fail_notif)}`'
+
+    # Report the exception with a Slack message
+    requests.post(url=SLACK_URL,
+                  data=json.dumps({'text': fail_msg}),
+                  headers={"Content-type": "application/json",
+                           "Accept": "text/plain"})
 
     # Log the exception and update the log file on Slack
     logger.error('Pipeline failed with error: %s',
@@ -190,6 +207,13 @@ def upload_log_file(client, user, folder_id, log_file_id, log_fname):
 
             file = client.as_user(user).folder(folder_id).upload(log_fname)
 
+            upload_msg = (f'"{DATESTAMP}": `Uploaded {log_fname} to Box '
+                          f"folder {folder_id} with new file ID: {file.id}! "
+                          "Remember to update the config file!`")
+            requests.post(url=SLACK_URL,
+                          data=json.dumps({'text': upload_msg}),
+                          headers={"Content-type": "application/json",
+                                   "Accept": "text/plain"})
 
 
 if __name__ == '__main__':
@@ -199,6 +223,15 @@ if __name__ == '__main__':
                                 user=app_user)
     update_table(logs=df)
 
+    success_notif = {"status": "SUCCESS",
+                     "message": f"Successfully updated {config['db_name']}!"
+                     }
+    success_msg = f'"{DATESTAMP}": `{str(success_notif)}`'
+
+    requests.post(url=SLACK_URL,
+                  data=json.dumps({'text': success_msg}),
+                  headers={"Content-type": "application/json",
+                           "Accept": "text/plain"})
 
     logger.info('Pipeline finished running!')
 
