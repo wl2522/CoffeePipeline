@@ -1,16 +1,58 @@
+import logging
+import sys
+import json
+import atexit
 import sqlite3
+import traceback
 import pandas as pd
 from yaml import load, SafeLoader
 from boxsdk import Client, JWTAuth
+from boxsdk.exception import BoxAPIException
+
 
 with open('config.yml') as config_file:
     config = load(config_file, Loader=SafeLoader)
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+print_handler = logging.StreamHandler(stream=sys.stdout)
+file_handler = logging.FileHandler(filename=config['logging_fname'],
+                                   mode='a')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+print_handler.setFormatter(formatter)
+file_handler.setFormatter(formatter)
+logger.addHandler(print_handler)
+logger.addHandler(file_handler)
 
 # Authenticate using JWTAuth credentials stored in a JSON file
 sdk = JWTAuth.from_settings_file(config['auth_fname'])
 session_client = Client(sdk)
 app_user = session_client.user(user_id=str(config['app_user_id']))
+
+logger.info('Successfully authenticated to the Box API as the app user "%s"!',
+            app_user.get().name)
+
+
+def catch_exception(err_type, value, trace):
+    """Report any exceptions that were raised during the pipeline run."""
+    logger = logging.getLogger(__name__ + '.catch_exception')
+
+    # Extract the error message from the exception traceback
+    error_msg = traceback.format_exception_only(err_type, value)[0]
+
+    # Log the exception and update the log file on Slack
+    logger.error('Pipeline failed with error: %s',
+                 error_msg)
+    upload_log_file(client=session_client,
+                    user=app_user,
+                    folder_id=config['folder_id'],
+                    log_file_id=config['log_file_id'],
+                    log_fname=config['logging_fname'])
+
+    raise(err_type)
+
 
 def download_file(client, user):
     """Search the Box folder for the log file that should be uploaded daily.
@@ -27,6 +69,8 @@ def download_file(client, user):
         The file ID that was assigned to the log file by Box
 
     """
+    logger = logging.getLogger(__name__ + '.download_file')
+
     # Load the latest log file exported to Box from the coffee.guru app
     fname = '{}_{}.csv'.format(config['local_fname'].replace('.csv', ''),
                                pd.to_datetime('today').strftime('%d%m%Y'))
@@ -40,6 +84,27 @@ def download_file(client, user):
     result_fname = client.as_user(user).file(log_id).get().name
     upload_time = client.as_user(user).file(log_id).get().created_at
     upload_time = pd.to_datetime(upload_time, utc=True).tz_convert('EST')
+
+    logger.info('Found file named %s (file ID: %s), uploaded to Box at %s',
+                result_fname,
+                log_id,
+                str(upload_time))
+
+    # Ensure that the returned match is the correct file
+    if not fname == result_fname:
+        logger.exception("Box folder doesn't contain any file named %s!",
+                         fname)
+
+        raise RuntimeError
+
+    # Download the matching search result using the log file ID
+    with open(config['local_fname'], mode='wb') as log_path:
+        client.as_user(user).file(log_id).download_to(log_path)
+
+    logger.info('Downloaded file named %s (file ID: %s) as %s!',
+                fname,
+                log_id,
+                config['local_fname'])
 
     logs = pd.read_csv(config['local_fname'], sep=';')
 
@@ -106,15 +171,41 @@ def update_table(logs):
     logger.info('Successfully updated %s!', config['db_name'])
 
 
+def upload_log_file(client, user, folder_id, log_file_id, log_fname):
+    """Update the copy of the logging file stored in the Box folder."""
+    logger = logging.getLogger(__name__ + '.upload_log_file')
 
+    try:
+        logger.info((f'Updating existing log file {log_file_id} '
+                     f'in Box folder {folder_id}...'))
 
+        client.as_user(user).file(log_file_id).update_contents(log_fname)
 
+    except BoxAPIException as e:
+        if e.message == 'Not Found':
+            logger.warning((f'Log file missing from folder {folder_id}! '
+                            'Attempting to upload the log as a new file... '
+                            '(Check for a Slack notification containing the '
+                            'file ID of the newly uploaded log file)'))
 
+            file = client.as_user(user).folder(folder_id).upload(log_fname)
 
 
 
 if __name__ == '__main__':
+    sys.excepthook = catch_exception
+
     df, file_id = download_file(client=session_client,
                                 user=app_user)
     update_table(logs=df)
 
+
+    logger.info('Pipeline finished running!')
+
+    # Upload the log file to Box whenever the script terminates
+    atexit.register(upload_log_file,
+                    client=session_client,
+                    user=app_user,
+                    folder_id=config['folder_id'],
+                    log_file_id=config['log_file_id'],
+                    log_fname=config['logging_fname'])
