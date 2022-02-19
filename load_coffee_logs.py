@@ -129,8 +129,8 @@ def download_file(client, user):
     return logs, log_id
 
 
-def update_table(logs):
-    """Update the local SQLite3 database with the data downloaded from Box.
+def preprocess_data(logs):
+    """Preprocess and validate the raw data from the coffee brewing logs.
 
     Since the coffee.guru app only contains a "notes" field rather than
     specific fields for describing different aspects of the coffee, the notes
@@ -145,18 +145,10 @@ def update_table(logs):
     Note: The coffee logs table uses the brew_date column as the primary key.
     Existing records with the same brew date as a record that's being inserted
     will be deleted and overwritten with the new record.
-
-    Parameters
-    ----------
-    logs : pandas DataFrame
-
-    Returns
-    -------
-    None
-
     """
-    logger = logging.getLogger(__name__ + '.update_table')
+    logger = logging.getLogger(__name__ + '.preprocess_data')
 
+    # Delete the unit of measurement (grams) to convert the column to integers
     logs['Coffee'] = logs['Coffee'].str.replace(' g', '')
 
     # Split the "Note" column into separate columns on the "/" delimiter
@@ -165,11 +157,19 @@ def update_table(logs):
     notes = notes.str.split(r'\s*\/\s*', expand=True)
     notes = notes.replace(to_replace=r'\s{2,}|^\s|\s$', value='', regex=True)
     notes.columns = ['Bean', 'Grind', 'Flavor', 'Balance']
+
     logs = logs.drop('Note', axis=1)
     logs = pd.concat([logs, notes], axis=1)
     logs.to_csv(config['local_fname'], index=False)
 
     logger.info('Saved the downloaded data to %s!', config['local_fname'])
+
+    return logs
+
+
+def update_table(logs):
+    """Update the local SQLite3 database with the data downloaded from Box."""
+    logger = logging.getLogger(__name__ + '.update_table')
 
     conn = sqlite3.connect(config['db_name'])
 
@@ -222,6 +222,7 @@ if __name__ == '__main__':
 
     df, file_id = download_file(client=session_client,
                                 user=app_user)
+    df = preprocess_data(logs=df)
     update_table(logs=df)
 
     success_notif = {"status": "SUCCESS",
