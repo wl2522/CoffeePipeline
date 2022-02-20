@@ -5,6 +5,7 @@ import json
 import atexit
 import sqlite3
 import traceback
+import numpy as np
 import pandas as pd
 import requests
 from yaml import load, SafeLoader
@@ -129,6 +130,29 @@ def download_file(client, user):
     return logs, log_id
 
 
+def check_nan_values(logs):
+    """Check for missing user input values prior to updating the database."""
+    logger = logging.getLogger(__name__ + '.check_nan_values')
+
+    # Find the row indices containing missing values for each user input column
+    for col in ['Score (out of 5)', 'Bean', 'Grind', 'Flavor', 'Balance']:
+        nan_idx = np.where(pd.isnull(logs[col]))[0]
+        nan_times = pd.to_datetime(logs.iloc[nan_idx]['Timestamp'],
+                                   unit='s',
+                                   utc=True
+                                   ).dt.tz_convert('EST')
+        nan_times = nan_times.dt.strftime('%Y-%m-%d %I:%M%p')
+
+        if len(nan_idx) > 0:
+            logger.exception(
+                'Column %s contains missing value(s) in row(s): %s, %s',
+                col,
+                str(nan_idx),
+                nan_times.values)
+
+    if len(nan_idx) > 0:
+        raise ValueError
+
 def preprocess_data(logs):
     """Preprocess and validate the raw data from the coffee brewing logs.
 
@@ -163,6 +187,9 @@ def preprocess_data(logs):
     logs.to_csv(config['local_fname'], index=False)
 
     logger.info('Saved the downloaded data to %s!', config['local_fname'])
+
+    # Validate the columns containing user inputted data
+    check_nan_values(logs)
 
     return logs
 
