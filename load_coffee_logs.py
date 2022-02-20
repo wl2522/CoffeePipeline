@@ -153,6 +153,79 @@ def check_nan_values(logs):
     if len(nan_idx) > 0:
         raise ValueError
 
+
+def validate_text(note_col, adverb_list, adjective_list):
+    """Validate a column of tasting notes text from the coffee brewing logs.
+
+    Parameters
+    ----------
+    notes_col : pandas Series
+        The column containing the tasting notes text to validate
+    adverbs_list : list of str
+        The list of valid adverbs that are allowed to appear in the notes
+    adjective_list : list of str
+        The list of valid adjectives that are allowed to appear in the notes
+
+    Returns
+    -------
+    None
+
+    """
+    logger = logging.getLogger(__name__ + '.validate_inputs')
+
+    notes = note_col.str.split(' ', expand=True)
+    unexpected_idx = list()
+    unexpected_vals = list()
+
+    # Confirm that the column contains notes consisting of at least two words
+    if len(notes.columns) < 2:
+        logger.exception('Column "%s" contains invalid text!',
+                         note_col)
+
+        raise ValueError
+
+    # Confirm that the notes only contain valid adverbs/adjectives
+    notes = notes.rename({0: 'adverbs',
+                          1: 'adjectives'},
+                         axis='columns')
+
+    invalid_adverbs = notes.loc[
+        ~notes['adverbs'].str.contains('|'.join(adverb_list),
+                                       regex=True),
+        'adverbs']
+    unexpected_vals += list(invalid_adverbs.values)
+    unexpected_idx += list(invalid_adverbs.index)
+
+    # Avoid raising TypeError by excluding notes containing only one word
+    invalid_adjs = notes.loc[pd.notna(notes['adjectives']), 'adjectives']
+    invalid_adjs = invalid_adjs.loc[
+        ~invalid_adjs.str.contains('|'.join(adjective_list),
+                                   case=True,
+                                   regex=True)]
+    unexpected_vals += list(invalid_adjs.values)
+    unexpected_idx += list(invalid_adjs.index)
+
+    # Check for any extra words/characters that may be present
+    if notes.shape[1] > 2:
+        for col in range(2, notes.shape[1]):
+            extra_chars = notes.loc[pd.notna(notes[col]), col]
+            unexpected_vals += list(extra_chars.values)
+            unexpected_idx += list(extra_chars.index)
+
+    # De-duplicate and sort the row numbers/values found in the data
+    unexpected_idx = sorted(list(set(unexpected_idx)))
+    unexpected_vals = sorted(list(set(unexpected_vals)))
+
+    if len(unexpected_idx) > 0:
+        logger.exception(
+            'Column "%s" contains invalid values in rows: %s, %s ',
+            note_col.name,
+            str(unexpected_idx),
+            str(unexpected_vals))
+
+        raise ValueError
+
+
 def validate_grind_settings(grind_col, min_val, max_val):
     """Check the grind settings column for invalid and/or out of range values.
 
@@ -230,6 +303,15 @@ def preprocess_data(logs):
 
     # Validate the columns containing user inputted data
     check_nan_values(logs)
+
+    validate_text(note_col=logs['Flavor'],
+                  adverb_list=config['descriptors']['adverbs'],
+                  adjective_list=config['descriptors']['flavors'])
+
+    # Validate only rows where the balance note isn't just the word "Balanced"
+    validate_text(note_col=logs.loc[logs['Balance'] != 'Balanced', 'Balance'],
+                  adverb_list=config['descriptors']['adverbs'],
+                  adjective_list=config['descriptors']['balance'])
 
     # Validate only the grind settings column
     # (because non-missing scores from the app must be integer values from 1-5)
