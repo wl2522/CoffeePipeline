@@ -13,7 +13,7 @@ from boxsdk import Client, JWTAuth
 from boxsdk.exception import BoxAPIException
 
 
-with open('config.yml') as config_file:
+with open('config.yml', encoding='utf-8') as config_file:
     config = load(config_file, Loader=SafeLoader)
 
 SLACK_URL = 'https://hooks.slack.com/services/' + config['slack_webhook']
@@ -201,13 +201,13 @@ def update_table(logs):
     conn = sqlite3.connect(config['db_name'])
 
     # Create the table if it doesn't already exist
-    with open(config['create_script']) as create_statement:
+    with open(config['create_script'], encoding='utf-8') as create_statement:
         conn.executescript(create_statement.read())
         conn.commit()
 
     logs.to_sql('raw_logs', con=conn, if_exists='replace', index=False)
 
-    with open(config['insert_script']) as insert_statement:
+    with open(config['insert_script'], encoding='utf-8') as insert_statement:
         conn.execute(insert_statement.read())
         conn.commit()
 
