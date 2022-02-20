@@ -153,6 +153,46 @@ def check_nan_values(logs):
     if len(nan_idx) > 0:
         raise ValueError
 
+def validate_grind_settings(grind_col, min_val, max_val):
+    """Check the grind settings column for invalid and/or out of range values.
+
+    Parameters
+    ----------
+    grind_col : pandas Series
+        The column containing the grind settings data to validate
+    min_val : int
+        The lower bound for valid grind settings
+    max_val : int
+        The upper bound for valid grind settings
+
+    Returns
+    -------
+    None
+
+    """
+    # logger = logging.getLogger(__name__ + '.validate_grind_settings')
+
+    if not pd.api.types.is_integer_dtype(grind_col.dtype):
+        non_int_vals = grind_col[~grind_col.map(pd.api.types.is_integer)]
+
+        logger.exception(
+            'Notes column "Grind" contains non-integer values in rows: %s, %s',
+            str(non_int_vals.index.to_list()),
+            str(non_int_vals.values))
+
+        raise ValueError
+
+    invalid_vals = grind_col[~grind_col.between(min_val, max_val,
+                                                inclusive='both')]
+
+    if len(invalid_vals) > 0:
+        logger.exception(('Notes column "Grind" contains values outside the '
+                          f'valid range of [{min_val}, {max_val}]: '
+                          f'{invalid_vals.index}, {invalid_vals.values}'))
+
+        raise ValueError
+
+
 def preprocess_data(logs):
     """Preprocess and validate the raw data from the coffee brewing logs.
 
@@ -190,6 +230,12 @@ def preprocess_data(logs):
 
     # Validate the columns containing user inputted data
     check_nan_values(logs)
+
+    # Validate only the grind settings column
+    # (because non-missing scores from the app must be integer values from 1-5)
+    validate_grind_settings(grind_col=logs['Grind'],
+                            min_val=config['min_grind_setting'],
+                            max_val=config['max_grind_setting'])
 
     return logs
 
