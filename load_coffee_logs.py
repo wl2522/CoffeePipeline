@@ -243,23 +243,28 @@ def validate_grind_settings(grind_col, min_val, max_val):
     None
 
     """
-    # logger = logging.getLogger(__name__ + '.validate_grind_settings')
+    logger = logging.getLogger(__name__ + '.validate_grind_settings')
 
     if not pd.api.types.is_integer_dtype(grind_col.dtype):
-        non_int_vals = grind_col[~grind_col.map(pd.api.types.is_integer)]
+        # Check if the column consists entirely of integers in string form
+        try:
+            grind_col = grind_col.copy().astype(int)
 
-        logger.exception(
-            'Notes column "Grind" contains non-integer values in rows: %s, %s',
-            str(non_int_vals.index.to_list()),
-            str(non_int_vals.values))
+        except ValueError:
+            non_int_vals = grind_col[~grind_col.map(pd.api.types.is_integer)]
 
-        raise ValueError
+            logger.exception(
+                'Column "Grind" contains non-integer values in rows: %s, %s',
+                str(non_int_vals.index.to_list()),
+                str(non_int_vals.values))
+
+            raise ValueError
 
     invalid_vals = grind_col[~grind_col.between(min_val, max_val,
                                                 inclusive='both')]
 
     if len(invalid_vals) > 0:
-        logger.exception(('Notes column "Grind" contains values outside the '
+        logger.exception(('Column "Grind" contains values outside the '
                           f'valid range of [{min_val}, {max_val}]: '
                           f'{invalid_vals.index}, {invalid_vals.values}'))
 
