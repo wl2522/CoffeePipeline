@@ -17,8 +17,8 @@ with open('config.yml', encoding='utf-8') as config_file:
     config = load(config_file, Loader=SafeLoader)
 
 SLACK_URL = 'https://hooks.slack.com/services/' + config['slack_webhook']
-DATESTAMP = pd.to_datetime('now', utc=True
-                           ).tz_convert('EST').strftime('%Y-%m-%d %I:%M%p')
+DATESTAMP = pd.to_datetime('now', utc=True).tz_convert(config['time_zone'])
+DATESTAMP = DATESTAMP.strftime('%Y-%m-%d %I:%M%p')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
