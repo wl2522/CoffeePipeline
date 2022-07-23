@@ -20,8 +20,8 @@ SLACK_URL = 'https://hooks.slack.com/services/' + config['slack_webhook']
 DATESTAMP = pd.to_datetime('now', utc=True).tz_convert(config['time_zone'])
 DATESTAMP = DATESTAMP.strftime('%Y-%m-%d %I:%M%p')
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+main_logger = logging.getLogger(__name__)
+main_logger.setLevel(logging.INFO)
 
 print_handler = logging.StreamHandler(stream=sys.stdout)
 file_handler = logging.FileHandler(filename=config['logging_fname'],
@@ -30,16 +30,16 @@ formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 print_handler.setFormatter(formatter)
 file_handler.setFormatter(formatter)
-logger.addHandler(print_handler)
-logger.addHandler(file_handler)
+main_logger.addHandler(print_handler)
+main_logger.addHandler(file_handler)
 
 # Authenticate using JWTAuth credentials stored in a JSON file
 sdk = JWTAuth.from_settings_file(config['auth_fname'])
 session_client = Client(sdk)
 app_user = session_client.user(user_id=str(config['app_user_id']))
 
-logger.info('Successfully authenticated to the Box API as the app user "%s"!',
-            app_user.get().name)
+main_logger.info('Successfully authenticated as the Box API app user "%s"!',
+                 app_user.get().name)
 
 
 def catch_exception(err_type, value, trace):
@@ -111,10 +111,10 @@ def download_file(client, user):
 
     # Ensure that the returned match is the correct file
     if not fname == result_fname:
-        logger.exception("Box folder doesn't contain any file named %s!",
-                         fname)
+        err_msg = "Box folder doesn't contain any file named %s!" % fname
+        logger.exception(err_msg)
 
-        raise RuntimeError
+        raise RuntimeError(err_msg)
 
     # Download the matching search result using the log file ID
     with open(config['local_fname'], mode='wb') as log_path:
@@ -135,6 +135,9 @@ def check_nan_values(logs):
     logger = logging.getLogger(__name__ + '.check_nan_values')
 
     # Find the row indices containing missing values for each user input column
+    nan_msgs = list()
+
+    # Find the timestamp of the row with the missing value
     for col in ['Score (out of 5)', 'Bean', 'Grind', 'Flavor', 'Balance']:
         nan_idx = np.where(pd.isnull(logs[col]))[0]
         nan_times = pd.to_datetime(logs.iloc[nan_idx]['Timestamp'],
@@ -144,14 +147,15 @@ def check_nan_values(logs):
         nan_times = nan_times.dt.strftime('%Y-%m-%d %I:%M%p')
 
         if len(nan_idx) > 0:
-            logger.exception(
-                'Column %s contains missing value(s) in row(s): %s, %s',
-                col,
-                str(nan_idx),
-                nan_times.values)
+            msg = (f'Column "{col}" contains missing value(s) in row(s) '
+                   f'{nan_idx.tolist()}: {nan_times.tolist()}')
+            nan_msgs.append(msg)
 
-    if len(nan_idx) > 0:
-        raise ValueError
+    if len(nan_msgs) > 0:
+        err_msg = ', \n'.join(nan_msgs)
+        logger.exception(err_msg)
+
+        raise ValueError(err_msg)
 
 
 def validate_text(note_col, adverb_list, adjective_list):
@@ -224,7 +228,7 @@ def validate_text(note_col, adverb_list, adjective_list):
     unexpected_vals = sorted(list(set(unexpected_vals)))
 
     if len(unexpected_idx) > 0:
-        err_msg = 'Column "%s" contains invalid values in rows: %s, %s' % (
+        err_msg = 'Column "%s" contains invalid values in row(s): %s, %s' % (
             note_col.name,
             str(unexpected_idx),
             str(unexpected_vals))
@@ -257,25 +261,26 @@ def validate_grind_settings(grind_col, min_val, max_val):
         try:
             grind_col = grind_col.copy().astype(int)
 
-        except ValueError:
+        except ValueError as e:
             non_int_vals = grind_col[~grind_col.map(pd.api.types.is_integer)]
+            err_msg = ('Column "Grind" contains non-integer values in row(s) '
+                       f'{non_int_vals.index.tolist()}: '
+                       f'{non_int_vals.tolist()}')
 
-            logger.exception(
-                'Column "Grind" contains non-integer values in rows: %s, %s',
-                str(non_int_vals.index.to_list()),
-                str(non_int_vals.values))
+            logger.exception(err_msg)
 
-            raise ValueError
+            raise ValueError(err_msg) from e
 
     invalid_vals = grind_col[~grind_col.between(min_val, max_val,
                                                 inclusive='both')]
 
     if len(invalid_vals) > 0:
-        logger.exception(('Column "Grind" contains values outside the '
-                          f'valid range of [{min_val}, {max_val}]: '
-                          f'{invalid_vals.index}, {invalid_vals.values}'))
+        err_msg = ('Column "Grind" contains values outside the '
+                   f'valid range of [{min_val}, {max_val}] in row(s) '
+                   f'{invalid_vals.index.tolist()}: {invalid_vals.tolist()}')
+        logger.exception(err_msg)
 
-        raise ValueError
+        raise ValueError(err_msg)
 
 
 def preprocess_data(logs):
@@ -361,17 +366,19 @@ def upload_log_file(client, user, folder_id, log_file_id, log_fname):
     logger = logging.getLogger(__name__ + '.upload_log_file')
 
     try:
-        logger.info((f'Updating existing log file {log_file_id} '
-                     f'in Box folder {folder_id}...'))
+        logger.info('Updating existing log file %s in Box folder %s...',
+                    log_file_id,
+                    folder_id)
 
         client.as_user(user).file(log_file_id).update_contents(log_fname)
 
     except BoxAPIException as e:
         if e.message == 'Not Found':
-            logger.warning((f'Log file missing from folder {folder_id}! '
+            logger.warning(('Log file missing from folder %s! '
                             'Attempting to upload the log as a new file... '
                             '(Check for a Slack notification containing the '
-                            'file ID of the newly uploaded log file)'))
+                            'file ID of the newly uploaded log file)'),
+                           folder_id)
 
             file = client.as_user(user).folder(folder_id).upload(log_fname)
 
@@ -402,7 +409,7 @@ if __name__ == '__main__':
                   headers={"Content-type": "application/json",
                            "Accept": "text/plain"})
 
-    logger.info('Pipeline finished running!')
+    main_logger.info('Pipeline finished running!')
 
     # Upload the log file to Box whenever the script terminates
     atexit.register(upload_log_file,
