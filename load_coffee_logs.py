@@ -111,7 +111,7 @@ def download_file(client, user):
 
     # Ensure that the returned match is the correct file
     if not fname == result_fname:
-        err_msg = "Box folder doesn't contain any file named %s!" % fname
+        err_msg = f"Box folder doesn't contain any file named {fname}!"
         logger.exception(err_msg)
 
         raise RuntimeError(err_msg)
@@ -139,19 +139,19 @@ def check_nan_values(logs):
 
     # Find the timestamp of the row with the missing value
     for col in ['Score (out of 5)', 'Bean', 'Grind', 'Flavor', 'Balance']:
-        nan_idx = np.where(pd.isnull(logs[col]))[0]
+        nan_idx = np.where(pd.isnull(logs[col]))[0].tolist()
         nan_times = pd.to_datetime(logs.iloc[nan_idx]['Timestamp'],
                                    unit='s',
                                    utc=True
                                    ).dt.tz_convert('EST')
         nan_times = nan_times.dt.strftime('%Y-%m-%d %I:%M%p')
 
-        if len(nan_idx) > 0:
+        if nan_idx:
             msg = (f'Column "{col}" contains missing value(s) in row(s) '
                    f'{nan_idx.tolist()}: {nan_times.tolist()}')
             nan_msgs.append(msg)
 
-    if len(nan_msgs) > 0:
+    if nan_msgs:
         err_msg = ', \n'.join(nan_msgs)
         logger.exception(err_msg)
 
@@ -269,7 +269,7 @@ def validate_grind_settings(grind_col, min_val, max_val):
     invalid_vals = grind_col[~grind_col.between(min_val, max_val,
                                                 inclusive='both')]
 
-    if len(invalid_vals) > 0:
+    if invalid_vals:
         err_msg = ('Column "Grind" contains values outside the '
                    f'valid range of [{min_val}, {max_val}] in row(s) '
                    f'{invalid_vals.index.tolist()}: {invalid_vals.tolist()}')
@@ -302,7 +302,8 @@ def preprocess_data(logs):
 
     # Split the "Note" column into separate columns on the "/" delimiter
     notes = logs['Note']
-    notes = notes.str.replace('(Bean:)|(Grind:)|(Flavor:)|(Balance:)', '')
+    notes = notes.str.replace('(Bean:)|(Grind:)|(Flavor:)|(Balance:)', '',
+                              regex=True)
     notes = notes.str.split(r'\s*\/\s*', expand=True)
     notes = notes.replace(to_replace=r'\s{2,}|^\s|\s$', value='', regex=True)
     notes.columns = ['Bean', 'Grind', 'Flavor', 'Balance']
@@ -369,10 +370,10 @@ def upload_log_file(client, user, folder_id, log_file_id, log_fname):
 
     except BoxAPIException as e:
         if e.message == 'Not Found':
-            logger.warning(('Log file missing from folder %s! '
-                            'Attempting to upload the log as a new file... '
-                            '(Check for a Slack notification containing the '
-                            'file ID of the newly uploaded log file)'),
+            logger.warning('Log file missing from folder %s! '
+                           'Attempting to upload the log as a new file... '
+                           '(Check for a Slack notification containing the '
+                           'file ID of the newly uploaded log file)',
                            folder_id)
 
             file = client.as_user(user).folder(folder_id).upload(log_fname)
