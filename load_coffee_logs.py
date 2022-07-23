@@ -171,7 +171,7 @@ def validate_text(note_col, adverb_list, adjective_list):
     None
 
     """
-    logger = logging.getLogger(__name__ + '.validate_inputs')
+    logger = logging.getLogger(__name__ + '.validate_text')
 
     notes = note_col.str.split(' ', expand=True)
     unexpected_idx = list()
@@ -179,10 +179,11 @@ def validate_text(note_col, adverb_list, adjective_list):
 
     # Confirm that the column contains notes consisting of at least two words
     if len(notes.columns) < 2:
+        err_msg = 'Column "%s" contains invalid text!' % note_col
         logger.exception('Column "%s" contains invalid text!',
                          note_col)
 
-        raise ValueError
+        raise ValueError(err_msg)
 
     # Confirm that the notes only contain valid adverbs/adjectives
     notes = notes.rename({0: 'adverbs',
@@ -196,7 +197,13 @@ def validate_text(note_col, adverb_list, adjective_list):
     unexpected_vals += list(invalid_adverbs.values)
     unexpected_idx += list(invalid_adverbs.index)
 
+    # Find rows that are missing an adjective
+    blank_adjs = notes.loc[pd.isna(notes['adjectives']), 'adjectives']
+    unexpected_vals += list(blank_adjs.values)
+    unexpected_idx += list(blank_adjs.index)
+
     # Avoid raising TypeError by excluding notes containing only one word
+    # (for old records where balance was only described as "Light" or "Heavy")
     invalid_adjs = notes.loc[pd.notna(notes['adjectives']), 'adjectives']
     invalid_adjs = invalid_adjs.loc[
         ~invalid_adjs.str.contains('|'.join(adjective_list),
@@ -217,13 +224,13 @@ def validate_text(note_col, adverb_list, adjective_list):
     unexpected_vals = sorted(list(set(unexpected_vals)))
 
     if len(unexpected_idx) > 0:
-        logger.exception(
-            'Column "%s" contains invalid values in rows: %s, %s ',
+        err_msg = 'Column "%s" contains invalid values in rows: %s, %s' % (
             note_col.name,
             str(unexpected_idx),
             str(unexpected_vals))
+        logger.exception(err_msg)
 
-        raise ValueError
+        raise ValueError(err_msg)
 
 
 def validate_grind_settings(grind_col, min_val, max_val):
