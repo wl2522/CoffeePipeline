@@ -178,60 +178,55 @@ def validate_text(note_col, adverb_list, adjective_list):
     logger = logging.getLogger(__name__ + '.validate_text')
 
     notes = note_col.str.split(' ', expand=True)
-    unexpected_idx = list()
     unexpected_vals = list()
+    err_msgs = list()
 
     # Confirm that the column contains notes consisting of at least two words
     if len(notes.columns) < 2:
-        err_msg = 'Column "%s" contains invalid text!' % note_col
-        logger.exception('Column "%s" contains invalid text!',
-                         note_col)
-
-        raise ValueError(err_msg)
+        err_msgs.append(f'Column "{note_col}" contains invalid text!')
 
     # Confirm that the notes only contain valid adverbs/adjectives
     notes = notes.rename({0: 'adverbs',
                           1: 'adjectives'},
                          axis='columns')
 
-    invalid_adverbs = notes.loc[
-        ~notes['adverbs'].str.contains('|'.join(adverb_list),
-                                       regex=True),
-        'adverbs']
-    unexpected_vals += list(invalid_adverbs.values)
-    unexpected_idx += list(invalid_adverbs.index)
+    invalid_adverbs = notes.loc[~notes['adverbs'].isin(adverb_list), 'adverbs']
+
+    if not invalid_adverbs.empty:
+        unexpected_vals.append(note_col[invalid_adverbs.index])
 
     # Find rows that are missing an adjective
     blank_adjs = notes.loc[pd.isna(notes['adjectives']), 'adjectives']
-    unexpected_vals += list(blank_adjs.values)
-    unexpected_idx += list(blank_adjs.index)
+
+    if not blank_adjs.empty:
+        unexpected_vals.append(note_col[blank_adjs.index])
 
     # Avoid raising TypeError by excluding notes containing only one word
     # (for old records where balance was only described as "Light" or "Heavy")
     invalid_adjs = notes.loc[pd.notna(notes['adjectives']), 'adjectives']
-    invalid_adjs = invalid_adjs.loc[
-        ~invalid_adjs.str.contains('|'.join(adjective_list),
-                                   case=True,
-                                   regex=True)]
-    unexpected_vals += list(invalid_adjs.values)
-    unexpected_idx += list(invalid_adjs.index)
+
+    invalid_adjs = invalid_adjs.loc[~invalid_adjs.isin(adjective_list)]
+
+    if not invalid_adjs.empty:
+        unexpected_vals.append(note_col[invalid_adjs.index])
 
     # Check for any extra words/characters that may be present
     if notes.shape[1] > 2:
         for col in range(2, notes.shape[1]):
             extra_chars = notes.loc[pd.notna(notes[col]), col]
-            unexpected_vals += list(extra_chars.values)
-            unexpected_idx += list(extra_chars.index)
+            unexpected_vals.append(note_col[extra_chars.index].tolist())
 
-    # De-duplicate and sort the row numbers/values found in the data
-    unexpected_idx = sorted(list(set(unexpected_idx)))
-    unexpected_vals = sorted(list(set(unexpected_vals)))
+    if unexpected_vals:
+        unexpected_vals = pd.concat(unexpected_vals,
+                                    axis=0
+                                    ).drop_duplicates().to_dict()
 
-    if len(unexpected_idx) > 0:
-        err_msg = 'Column "%s" contains invalid values in row(s): %s, %s' % (
-            note_col.name,
-            str(unexpected_idx),
-            str(unexpected_vals))
+        err_msgs.append((f'Column "{note_col.name}" contains invalid values '
+                         f'in row(s): {unexpected_vals}'))
+
+    if err_msgs:
+        err_msg = ', \n'.join(err_msgs)
+
         logger.exception(err_msg)
 
         raise ValueError(err_msg)
