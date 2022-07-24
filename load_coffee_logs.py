@@ -269,7 +269,7 @@ def validate_grind_settings(grind_col, min_val, max_val):
     invalid_vals = grind_col[~grind_col.between(min_val, max_val,
                                                 inclusive='both')]
 
-    if invalid_vals:
+    if not invalid_vals.empty:
         err_msg = ('Column "Grind" contains values outside the '
                    f'valid range of [{min_val}, {max_val}] in row(s) '
                    f'{invalid_vals.index.tolist()}: {invalid_vals.tolist()}')
