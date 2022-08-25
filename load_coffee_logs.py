@@ -158,6 +158,20 @@ def check_nan_values(logs):
         raise ValueError(err_msg)
 
 
+def check_scores(score_col):
+    """Check for rows that where a score was not submitted (score = 0)."""
+    logger = logging.getLogger(__name__ + '.check_scores')
+
+    unscored_idx = score_col[score_col == 0].index.tolist()
+
+    if unscored_idx:
+        err_msg = f'A brew score was not submitted in row(s): {unscored_idx}'
+
+        logger.exception(err_msg)
+
+        raise ValueError(err_msg)
+
+
 def validate_text(note_col, adverb_list, adjective_list):
     """Validate a column of tasting notes text from the coffee brewing logs.
 
@@ -316,6 +330,7 @@ def preprocess_data(logs):
 
     # Validate the columns containing user inputted data
     check_nan_values(logs)
+    check_scores(logs['Score (out of 5)'])
 
     validate_text(note_col=logs['Flavor'],
                   adverb_list=config['descriptors']['adverbs'],
