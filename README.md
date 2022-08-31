@@ -1,5 +1,5 @@
 # Coffee.cup.guru Data Pipeline
-I created this data pipeline to complement the logging capabilities of the [coffee.cup.guru](http://coffee.cup.guru/) app. Within the app, users are able to record their coffee brewing experiments. Each record contains the following data:
+I created this data pipeline to complement the logging capabilities of the [coffee.cup.guru](https://play.google.com/store/apps/details?id=guru.cup.coffee) app. Within the app, users are able to record their coffee brewing experiments. Each record contains the following data:
 - recipe name
 - datestamp for when the coffee was brewed
 - a 1-5 rating that the user provides after trying out the coffee
