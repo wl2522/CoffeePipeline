@@ -23,6 +23,8 @@ Fortunately, the app allows users to export their coffee brewing log as a CSV fi
 6. A notification is sent using a Slack API webhook in order to report the outcome of each run
 7. A logging file records the outcome of each pipeline run and is uploaded to the same Box folder at the end of the script
 
+The script that performs these steps is scheduled to run daily in Windows Task Scheduler through a batch script that first activates the appropriate conda environment.
+
 With the data stored in a SQLite database, it's much easier to review and analyze past data in order to learn from past trial and error. For example, I can simply run the following query to see which of my coffee brewing recipes and coffee grinder settings were best suited for brewing French Roast Mocha coffee beans:
 
 ```
