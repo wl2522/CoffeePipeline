@@ -8,6 +8,8 @@ import traceback
 import numpy as np
 import pandas as pd
 import requests
+import pytz
+
 from yaml import load, SafeLoader
 from boxsdk import Client, JWTAuth
 from boxsdk.exception import BoxAPIException
@@ -41,6 +43,12 @@ app_user = session_client.user(user_id=str(config['app_user_id']))
 main_logger.info('Successfully authenticated as the Box API app user "%s"!',
                  app_user.get().name)
 
+# Create the account user that this app will impersonate through the Box API
+account_user = session_client.user(user_id=str(config['user_id']))
+
+main_logger.info('The Box API app user will be impersonating user ID %s!',
+                 account_user.get().id)
+
 
 def catch_exception(err_type, value, trace):
     """Report any exceptions that were raised during the pipeline run."""
@@ -67,67 +75,120 @@ def catch_exception(err_type, value, trace):
     upload_log_file(client=session_client,
                     user=app_user,
                     folder_id=config['folder_id'],
-                    log_file_id=config['log_file_id'],
+                    file_id=config['log_file_id'],
                     log_fname=config['logging_fname'])
 
     raise(err_type)
 
 
-def download_file(client, user):
-    """Search the Box folder for the log file that should be uploaded daily.
+def get_file_id(client, user, folder_id):
+    """Get the file ID associated with each day's log file.
 
-    Note: Since the search() method returns inexact matches, the name of the
-    search result file must be compared with the expected file name before
-    continuing.
+    Since the Box API doesn't support downloading a file
+    by providing the file's path, the log file's ID needs
+    to be provided instead.
+
+    As a workaround, the `folder.preflight_check()` method can
+    be used to check if the log file already exists with the
+    expected file name and parent folder.
+
+    If this check fails (and returns an error), then that
+    indicates that the file already exists. The error
+    returned by the Box API will contain the file ID associated
+    with the log file, which can then be used to actually download
+    the file.
+
+    Parameters
+    ----------
+    client : boxsdk Client
+    user : boxsdk User
 
     Returns
     -------
-    logs : pandas DataFrame
-        The coffee brewing log data downloaded from the Box folder
-    log_id : str or int
+    file_id : str or int
         The file ID that was assigned to the log file by Box
 
     """
-    logger = logging.getLogger(__name__ + '.download_file')
+    logger = logging.getLogger(__name__ + '.check_for_file')
 
-    # Load the latest log file exported to Box from the coffee.guru app
-    fname = '{}_{}.csv'.format(config['local_fname'].replace('.csv', ''),
-                               pd.to_datetime('today').strftime('%d%m%Y'))
+    # Check if the latest log file was exported to Box from the coffee.guru app
+    fname_date_suffix = f"_{pd.to_datetime('today').strftime('%d%m%Y')}.csv"
+    fname = config['local_fname'].replace('.csv', fname_date_suffix)
 
-    # Search for the log file by its file name using the Box search API
-    log_search = client.as_user(user).search()
-    search_results = log_search.query(fname,
-                                      result_type='file',
-                                      file_extensions=['csv'])
-    log_id = search_results.next()['id']
-    result_fname = client.as_user(user).file(log_id).get().name
-    upload_time = client.as_user(user).file(log_id).get().created_at
-    upload_time = pd.to_datetime(upload_time, utc=True).tz_convert('EST')
+    logger.info('Checking folder ID %d for file %s',
+                folder_id,
+                fname)
 
-    logger.info('Found file named %s (file ID: %s), uploaded to Box at %s',
-                result_fname,
-                log_id,
-                str(upload_time))
+    # Impersonate the account user so that all files and folders are visible
+    # (https://github.com/box/box-python-sdk/issues/466#issuecomment-557851831)
+    log_folder = client.as_user(user).folder(str(folder_id))
 
-    # Ensure that the returned match is the correct file
-    if not fname == result_fname:
+    # Check if the file is already in the folder
+    try:
+        log_folder.preflight_check(size=0,  # Use 0 to indicate an unknown size
+                                   name=fname)
+
+        # Raise an error if the preflight check succeeds (file doesn't exist)
         err_msg = f"Box folder doesn't contain any file named {fname}!"
         logger.exception(err_msg)
 
         raise RuntimeError(err_msg)
 
+    # Return the file ID if the file already exists in the folder
+    except BoxAPIException as e:
+        logger.info('Found file "%s" in folder ID %d!',
+                    fname,
+                    folder_id)
+
+        file_id = e.context_info['conflicts']['id']
+
+        logger.info('Found file ID %s associated with file name %s!',
+                    file_id,
+                    fname)
+
+        return file_id
+
+
+def download_file(client, user, file_id):
+    """Download the log file that should be uploaded daily.
+
+    Parameters
+    ----------
+    client : boxsdk Client
+    user : boxsdk User
+    file_id : str or int
+
+    Returns
+    -------
+    logs : pandas DataFrame
+        The coffee brewing log data downloaded from the Box folder
+
+    """
+    logger = logging.getLogger(__name__ + '.download_file')
+
+    log_file = client.as_user(user).file(str(file_id)).get()
+    upload_time = pd.to_datetime(log_file.created_at,
+                                 utc=True)
+
+    # Convert the UTC timestamp to EST or EDT
+    upload_time = upload_time.tz_convert(pytz.timezone(config['time_zone']))
+
+    logger.info('Downloading file "%s" (file ID: %s), uploaded to Box at %s',
+                log_file.name,
+                file_id,
+                str(upload_time))
+
     # Download the matching search result using the log file ID
     with open(config['local_fname'], mode='wb') as log_path:
-        client.as_user(user).file(log_id).download_to(log_path)
+        client.as_user(user).file(str(file_id)).download_to(log_path)
 
-    logger.info('Downloaded file named %s (file ID: %s) as %s!',
-                fname,
-                log_id,
+    logger.info('Downloaded file ID: %s as "%s"!',
+                file_id,
                 config['local_fname'])
 
     logs = pd.read_csv(config['local_fname'], sep=';')
 
-    return logs, log_id
+    return logs
 
 
 def check_nan_values(logs):
@@ -372,16 +433,16 @@ def update_table(logs):
     logger.info('Successfully updated %s!', config['db_name'])
 
 
-def upload_log_file(client, user, folder_id, log_file_id, log_fname):
+def upload_log_file(client, user, folder_id, file_id, log_fname):
     """Update the copy of the logging file stored in the Box folder."""
     logger = logging.getLogger(__name__ + '.upload_log_file')
 
     try:
         logger.info('Updating existing log file %s in Box folder %s...',
-                    log_file_id,
+                    file_id,
                     folder_id)
 
-        client.as_user(user).file(log_file_id).update_contents(log_fname)
+        client.as_user(user).file(file_id).update_contents(log_fname)
 
     except BoxAPIException as e:
         if e.message == 'Not Found':
@@ -405,8 +466,13 @@ def upload_log_file(client, user, folder_id, log_file_id, log_fname):
 if __name__ == '__main__':
     sys.excepthook = catch_exception
 
-    df, file_id = download_file(client=session_client,
-                                user=app_user)
+    log_file_id = get_file_id(client=session_client,
+                              user=account_user,
+                              folder_id=config['folder_id'])
+
+    df = download_file(client=session_client,
+                       user=account_user,
+                       file_id=log_file_id)
     df = preprocess_data(logs=df)
     update_table(logs=df)
 
@@ -427,5 +493,5 @@ if __name__ == '__main__':
                     client=session_client,
                     user=app_user,
                     folder_id=config['folder_id'],
-                    log_file_id=config['log_file_id'],
+                    file_id=config['log_file_id'],
                     log_fname=config['logging_fname'])
