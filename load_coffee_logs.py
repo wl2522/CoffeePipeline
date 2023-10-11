@@ -5,6 +5,7 @@ import json
 import atexit
 import sqlite3
 import traceback
+
 import numpy as np
 import pandas as pd
 import requests
@@ -67,7 +68,8 @@ def catch_exception(err_type, value, trace):
     requests.post(url=SLACK_URL,
                   data=json.dumps({'text': fail_msg}),
                   headers={"Content-type": "application/json",
-                           "Accept": "text/plain"})
+                           "Accept": "text/plain"},
+                  timeout=config['request_timeout'])
 
     # Log the exception and update the log file on Slack
     logger.error('Pipeline failed with error: %s',
@@ -78,7 +80,7 @@ def catch_exception(err_type, value, trace):
                     file_id=config['log_file_id'],
                     log_fname=config['logging_fname'])
 
-    raise(err_type)
+    raise err_type
 
 
 def get_file_id(client, user, folder_id):
@@ -186,7 +188,9 @@ def download_file(client, user, file_id):
                 file_id,
                 config['local_fname'])
 
-    logs = pd.read_csv(config['local_fname'], sep=';')
+    logs = pd.read_csv(config['local_fname'],
+                       sep=';',
+                       iterator=False)
 
     return logs
 
@@ -196,7 +200,7 @@ def check_nan_values(logs):
     logger = logging.getLogger(__name__ + '.check_nan_values')
 
     # Find the row indices containing missing values for each user input column
-    nan_msgs = list()
+    nan_msgs = []
 
     # Find the timestamp of the row with the missing value
     for col in ['Score (out of 5)', 'Bean', 'Grind', 'Flavor', 'Balance']:
@@ -253,8 +257,8 @@ def validate_text(note_col, adverb_list, adjective_list):
     logger = logging.getLogger(__name__ + '.validate_text')
 
     notes = note_col.str.split(' ', expand=True)
-    unexpected_vals = list()
-    err_msgs = list()
+    unexpected_vals = []
+    err_msgs = []
 
     # Confirm that the column contains notes consisting of at least two words
     if len(notes.columns) < 2:
@@ -460,7 +464,8 @@ def upload_log_file(client, user, folder_id, file_id, log_fname):
             requests.post(url=SLACK_URL,
                           data=json.dumps({'text': upload_msg}),
                           headers={"Content-type": "application/json",
-                                   "Accept": "text/plain"})
+                                   "Accept": "text/plain"},
+                          timeout=config['request_timeout'])
 
 
 if __name__ == '__main__':
@@ -484,7 +489,8 @@ if __name__ == '__main__':
     requests.post(url=SLACK_URL,
                   data=json.dumps({'text': success_msg}),
                   headers={"Content-type": "application/json",
-                           "Accept": "text/plain"})
+                           "Accept": "text/plain"},
+                  timeout=config['request_timeout'])
 
     main_logger.info('Pipeline finished running!')
 
