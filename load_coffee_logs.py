@@ -384,7 +384,11 @@ def preprocess_data(logs):
     notes = notes.str.replace('(Bean:)|(Grind:)|(Flavor:)|(Balance:)', '',
                               regex=True)
     notes = notes.str.split(r'\s*\/\s*', expand=True)
-    notes = notes.replace(to_replace=r'\s{2,}|^\s|\s$', value='', regex=True)
+
+    # Remove leading/trailing/consecutive whitespace
+    notes = notes.replace(to_replace=r'^\s|\s$', value='', regex=True)
+    notes = notes.replace(to_replace=r'\s{2,}', value=' ', regex=True)
+
     notes.columns = ['Bean', 'Grind', 'Flavor', 'Balance']
 
     logs = logs.drop('Note', axis=1)
