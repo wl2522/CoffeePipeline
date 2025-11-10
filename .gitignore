@@ -1,6 +1,6 @@
 *.json
 *.csv
 *.db
-*.yml
+config.yml
 *.log
 *pylint.d
