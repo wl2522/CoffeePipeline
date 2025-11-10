@@ -1,5 +1,6 @@
 """Data pipeline for inserting coffee brewing logs into a SQLite3 database."""
 import logging
+import re
 import sys
 import json
 import atexit
@@ -381,15 +382,17 @@ def preprocess_data(logs):
 
     # Split the "Note" column into separate columns on the "/" delimiter
     notes = logs['Note']
-    notes = notes.str.replace('(Bean:)|(Grind:)|(Flavor:)|(Balance:)', '',
-                              regex=True)
+    notes = notes.str.replace(
+        '(Bean:)|(Grinder:)|(Grind:)|(Flavor:)|(Balance:)', '',
+        regex=True
+    )
     notes = notes.str.split(r'\s*\/\s*', expand=True)
 
     # Remove leading/trailing/consecutive whitespace
     notes = notes.replace(to_replace=r'^\s|\s$', value='', regex=True)
     notes = notes.replace(to_replace=r'\s{2,}', value=' ', regex=True)
 
-    notes.columns = ['Bean', 'Grind', 'Flavor', 'Balance']
+    notes.columns = ['Bean', 'Grinder', 'Grind', 'Flavor', 'Balance']
 
     logs = logs.drop('Note', axis=1)
     logs = pd.concat([logs, notes], axis=1)
