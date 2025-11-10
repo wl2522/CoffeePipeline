@@ -338,6 +338,7 @@ def validate_grind_settings(grind_col, min_val, max_val):
 
         except ValueError as e:
             non_int_vals = grind_col[~grind_col.map(pd.api.types.is_integer)]
+
             err_msg = ('Column "Grind" contains non-integer values in row(s) '
                        f'{non_int_vals.index.tolist()}: '
                        f'{non_int_vals.tolist()}')
@@ -346,8 +347,9 @@ def validate_grind_settings(grind_col, min_val, max_val):
 
             raise ValueError(err_msg) from e
 
-    invalid_vals = grind_col[~grind_col.between(min_val, max_val,
-                                                inclusive='both')]
+    invalid_vals = grind_col[
+        ~grind_col.between(min_val, max_val, inclusive='both')
+    ]
 
     if not invalid_vals.empty:
         err_msg = ('Column "Grind" contains values outside the '
@@ -409,15 +411,31 @@ def preprocess_data(logs):
                   adjective_list=config['descriptors']['flavors'])
 
     # Validate only rows where the balance note isn't just the word "Balanced"
-    validate_text(note_col=logs.loc[logs['Balance'] != 'Balanced', 'Balance'],
+    validate_text(note_col=logs.loc[logs['Balance'].ne('Balanced'), 'Balance'],
                   adverb_list=config['descriptors']['adverbs'],
                   adjective_list=config['descriptors']['balance'])
 
     # Validate only the grind settings column
     # (because non-missing scores from the app must be integer values from 1-5)
-    validate_grind_settings(grind_col=logs['Grind'],
-                            min_val=config['min_grind_setting'],
-                            max_val=config['max_grind_setting'])
+    for grinder in logs['Grinder'].unique():
+        logger.info("Validating grind setting values for grinder %s", grinder)
+
+        grinder_name = re.sub(r'\s+|-', '_', grinder.lower())
+
+        if grinder_name not in config['grind_setting_ranges']:
+            logger.error("Grind settings range not set for grinder %s!",
+                         grinder)
+
+            raise ValueError
+
+        grind_setting_range = config['grind_setting_ranges'][grinder_name]
+
+
+        validate_grind_settings(
+            grind_col=logs.loc[logs['Grinder'].eq(grinder), 'Grind'],
+            min_val=grind_setting_range['min'],
+            max_val=grind_setting_range['max']
+        )
 
     return logs
 
