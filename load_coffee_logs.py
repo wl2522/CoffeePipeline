@@ -13,8 +13,9 @@ import requests
 import pytz
 
 from yaml import load, SafeLoader
-from boxsdk import Client, JWTAuth
-from boxsdk.exception import BoxAPIException
+from box_sdk_gen import BoxClient, BoxJWTAuth, JWTConfig
+from box_sdk_gen.box.errors import BoxAPIError
+from box_sdk_gen.managers.uploads import PreflightFileUploadCheckParent
 
 
 with open('config.yml', encoding='utf-8') as config_file:
@@ -38,18 +39,15 @@ main_logger.addHandler(print_handler)
 main_logger.addHandler(file_handler)
 
 # Authenticate using JWTAuth credentials stored in a JSON file
-sdk = JWTAuth.from_settings_file(config['auth_fname'])
-session_client = Client(sdk)
-app_user = session_client.user(user_id=str(config['app_user_id']))
+jwt_config = JWTConfig.from_config_file(config['auth_fname'])
+auth = BoxJWTAuth(config=jwt_config)
+session_client = BoxClient(auth)
+app_user = session_client.users.get_user_by_id(
+    user_id=config['app_user_id']
+)
 
 main_logger.info('Successfully authenticated as the Box API app user "%s"!',
-                 app_user.get().name)
-
-# Create the account user that this app will impersonate through the Box API
-account_user = session_client.user(user_id=str(config['user_id']))
-
-main_logger.info('The Box API app user will be impersonating user ID %s!',
-                 account_user.get().id)
+                 app_user.name)
 
 
 def catch_exception(err_type, value, trace):
@@ -84,15 +82,18 @@ def catch_exception(err_type, value, trace):
     raise err_type
 
 
-def get_file_id(client, user, folder_id):
+def get_file_id(client, user_id, folder_id):
     """Get the file ID associated with each day's log file.
 
     Since the Box API doesn't support downloading a file
     by providing the file's path, the log file's ID needs
     to be provided instead.
 
-    As a workaround, the `folder.preflight_check()` method can
-    be used to check if the log file already exists with the
+    As a workaround, the `folder.preflight_check()` method is used to get
+    the log file ID. This method is meant to be used prior to uploading a
+    file to Box to check if that file already exists at the upload destination.
+
+    This method can be used to check if the log file already exists with the
     expected file name and parent folder.
 
     If this check fails (and returns an error), then that
@@ -103,12 +104,13 @@ def get_file_id(client, user, folder_id):
 
     Parameters
     ----------
-    client : boxsdk Client
-    user : boxsdk User
+    client : box_sdk_gen BoxClient
+    user_id : str
+    folder_id : str
 
     Returns
     -------
-    file_id : str or int
+    file_id : str
         The file ID that was assigned to the log file by Box
 
     """
@@ -118,18 +120,21 @@ def get_file_id(client, user, folder_id):
     fname_date_suffix = f"_{pd.to_datetime('today').strftime('%d%m%Y')}.csv"
     fname = config['local_fname'].replace('.csv', fname_date_suffix)
 
-    logger.info('Checking folder ID %d for file %s',
+    logger.info('Checking folder ID %s for file %s',
                 folder_id,
                 fname)
 
     # Impersonate the account user so that all files and folders are visible
     # (https://github.com/box/box-python-sdk/issues/466#issuecomment-557851831)
-    log_folder = client.as_user(user).folder(str(folder_id))
-
-    # Check if the file is already in the folder
     try:
-        log_folder.preflight_check(size=0,  # Use 0 to indicate an unknown size
-                                   name=fname)
+        # Check if the file is already in the folder
+        client.with_as_user_header(
+            user_id=user_id
+        ).uploads.preflight_file_upload_check(
+            name=fname,
+            parent=PreflightFileUploadCheckParent(id=folder_id),
+            size=None
+        )
 
         # Raise an error if the preflight check succeeds (file doesn't exist)
         err_msg = f"Box folder doesn't contain any file named {fname}!"
@@ -138,12 +143,12 @@ def get_file_id(client, user, folder_id):
         raise RuntimeError(err_msg)
 
     # Return the file ID if the file already exists in the folder
-    except BoxAPIException as e:
-        logger.info('Found file "%s" in folder ID %d!',
+    except BoxAPIError as e:
+        logger.info('Found file "%s" in folder ID %s!',
                     fname,
                     folder_id)
 
-        file_id = e.context_info['conflicts']['id']
+        file_id = e.response_info.body['context_info']['conflicts']['id']
 
         logger.info('Found file ID %s associated with file name %s!',
                     file_id,
@@ -152,14 +157,14 @@ def get_file_id(client, user, folder_id):
         return file_id
 
 
-def download_file(client, user, file_id):
+def download_file(client, user_id, file_id):
     """Download the log file that should be uploaded daily.
 
     Parameters
     ----------
     client : boxsdk Client
-    user : boxsdk User
-    file_id : str or int
+    user_id : str
+    file_id : str
 
     Returns
     -------
@@ -169,7 +174,13 @@ def download_file(client, user, file_id):
     """
     logger = logging.getLogger(__name__ + '.download_file')
 
-    log_file = client.as_user(user).file(str(file_id)).get()
+    # Get the file's metadata for logging purposes
+    log_file = client.with_as_user_header(
+        user_id=config['user_id']
+    ).files.get_file_by_id(
+        file_id
+    )
+
     upload_time = pd.to_datetime(log_file.created_at,
                                  utc=True)
 
@@ -182,8 +193,13 @@ def download_file(client, user, file_id):
                 str(upload_time))
 
     # Download the matching search result using the log file ID
-    with open(config['local_fname'], mode='wb') as log_path:
-        client.as_user(user).file(str(file_id)).download_to(log_path)
+    with open(config['local_fname'], mode='wb') as log_stream:
+        client.with_as_user_header(
+            user_id=user_id
+        ).downloads.download_file_to_output_stream(
+            file_id,
+            log_stream
+        )
 
     logger.info('Downloaded file ID: %s as "%s"!',
                 file_id,
@@ -473,7 +489,7 @@ def upload_log_file(client, user, folder_id, file_id, log_fname):
 
         client.as_user(user).file(file_id).update_contents(log_fname)
 
-    except BoxAPIException as e:
+    except BoxAPIError as e:
         if e.message == 'Not Found':
             logger.warning('Log file missing from folder %s! '
                            'Attempting to upload the log as a new file... '
@@ -497,11 +513,11 @@ if __name__ == '__main__':
     sys.excepthook = catch_exception
 
     log_file_id = get_file_id(client=session_client,
-                              user=account_user,
+                              user_id=config['user_id'],
                               folder_id=config['folder_id'])
 
     df = download_file(client=session_client,
-                       user=account_user,
+                       user_id=config['user_id'],
                        file_id=log_file_id)
     df = preprocess_data(logs=df)
     update_table(logs=df)

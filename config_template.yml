@@ -1,4 +1,5 @@
 ---
+# The Box API requires ID values to be cast as strings
 user_id:
 app_user_id:
 folder_id:
