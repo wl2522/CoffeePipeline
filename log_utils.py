@@ -1,7 +1,9 @@
+import json
 import logging
 
 import numpy as np
 import pandas as pd
+import requests
 import sqlite3
 
 
@@ -189,3 +191,21 @@ def update_table(logs, config):
     conn.close()
 
     logger.info('Successfully updated %s!', config['db_name'])
+
+
+def send_slack_notification(timestamp, config):
+    """Use a Slack webhook URL to send a notification of a successful
+    pipeline run.
+    """
+    success_notif = {"status": "SUCCESS",
+                     "message": f"Successfully updated {config['db_name']}!"
+                     }
+    success_msg = f'"{timestamp}": `{str(success_notif)}`'
+
+    slack_url = 'https://hooks.slack.com/services/' + config['slack_webhook']
+
+    requests.post(url=slack_url,
+                  data=json.dumps({'text': success_msg}),
+                  headers={"Content-type": "application/json",
+                           "Accept": "text/plain"},
+                  timeout=config['request_timeout'])

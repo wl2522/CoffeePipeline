@@ -3,13 +3,9 @@ import functools
 import logging
 import re
 import sys
-import json
 import atexit
-import sqlite3
 
-import numpy as np
 import pandas as pd
-import requests
 
 from yaml import load, SafeLoader
 from box_sdk_gen import BoxClient, BoxJWTAuth, JWTConfig
@@ -17,13 +13,13 @@ from box_sdk_gen import BoxClient, BoxJWTAuth, JWTConfig
 from box_utils import (catch_exception, get_file_id, download_file,
                        upload_log_file)
 from log_utils import (check_nan_values, check_scores, validate_text,
-                       validate_grind_settings, update_table)
+                       validate_grind_settings, update_table,
+                       send_slack_notification)
 
 
 with open('config.yml', encoding='utf-8') as config_file:
     config = load(config_file, Loader=SafeLoader)
 
-SLACK_URL = 'https://hooks.slack.com/services/' + config['slack_webhook']
 DATESTAMP = pd.to_datetime('now', utc=True).tz_convert(config['time_zone'])
 DATESTAMP = DATESTAMP.strftime('%Y-%m-%d %I:%M%p')
 
@@ -159,16 +155,8 @@ if __name__ == '__main__':
 
     update_table(logs=df, config=config)
 
-    success_notif = {"status": "SUCCESS",
-                     "message": f"Successfully updated {config['db_name']}!"
-                     }
-    success_msg = f'"{DATESTAMP}": `{str(success_notif)}`'
-
-    requests.post(url=SLACK_URL,
-                  data=json.dumps({'text': success_msg}),
-                  headers={"Content-type": "application/json",
-                           "Accept": "text/plain"},
-                  timeout=config['request_timeout'])
+    send_slack_notification(timestamp=DATESTAMP,
+                            config=config)
 
     main_logger.info('Pipeline finished running!')
 
