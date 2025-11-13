@@ -2,6 +2,7 @@
 *.db
 *.log
 *pylint.d
+__pycache__
 # Ignore these files because they contain sensitive data
 config.json
 config.yml
