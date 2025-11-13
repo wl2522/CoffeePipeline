@@ -20,8 +20,14 @@ from log_utils import (check_nan_values, check_scores, validate_text,
 with open('config.yml', encoding='utf-8') as config_file:
     config = load(config_file, Loader=SafeLoader)
 
-DATESTAMP = pd.to_datetime('now', utc=True).tz_convert(config['time_zone'])
-DATESTAMP = DATESTAMP.strftime('%Y-%m-%d %I:%M%p')
+DATESTAMP = pd.to_datetime(
+    'now',
+    utc=True
+).tz_convert(
+    config['time_zone']
+).strftime(
+    '%Y-%m-%d %I:%M%p'
+)
 
 main_logger = logging.getLogger(__name__)
 main_logger.setLevel(logging.INFO)
@@ -30,22 +36,13 @@ print_handler = logging.StreamHandler(stream=sys.stdout)
 file_handler = logging.FileHandler(filename=config['logging_fname'],
                                    mode='a')
 formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 print_handler.setFormatter(formatter)
 file_handler.setFormatter(formatter)
 main_logger.addHandler(print_handler)
 main_logger.addHandler(file_handler)
-
-# Authenticate using JWTAuth credentials stored in a JSON file
-jwt_config = JWTConfig.from_config_file(config['auth_fname'])
-auth = BoxJWTAuth(config=jwt_config)
-session_client = BoxClient(auth)
-app_user = session_client.users.get_user_by_id(
-    user_id=config['app_user_id']
-)
-
-main_logger.info('Successfully authenticated as the Box API app user "%s"!',
-                 app_user.name)
 
 
 def preprocess_data(logs):
@@ -129,6 +126,17 @@ def preprocess_data(logs):
 
 
 if __name__ == '__main__':
+    # Authenticate using JWTAuth credentials stored in a JSON file
+    jwt_config = JWTConfig.from_config_file(config['auth_fname'])
+    auth = BoxJWTAuth(config=jwt_config)
+    session_client = BoxClient(auth)
+    app_user = session_client.users.get_user_by_id(
+        user_id=config['app_user_id']
+    )
+
+    main_logger.info('Successfully authenticated as Box API app user "%s"!',
+                     app_user.name)
+
     sys.excepthook = functools.partial(
         catch_exception,
         config=config,
