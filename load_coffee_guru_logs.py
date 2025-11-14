@@ -7,11 +7,12 @@ import logging
 import re
 import sys
 import atexit
+from datetime import datetime, UTC
 
 import pandas as pd
-
-from yaml import load, SafeLoader
 from box_sdk_gen import BoxClient, BoxJWTAuth, JWTConfig
+from pytz import timezone
+from yaml import load, SafeLoader
 
 from box_utils import (catch_exception, get_file_id, download_file,
                        upload_log_file)
@@ -23,11 +24,8 @@ from log_utils import (check_nan_values, check_scores, validate_text,
 with open('config/config.yml', encoding='utf-8') as config_file:
     config = load(config_file, Loader=SafeLoader)
 
-DATESTAMP = pd.to_datetime(
-    'now',
-    utc=True
-).tz_convert(
-    config['time_zone']
+DATESTAMP = datetime.now(UTC).astimezone(
+    timezone(config['time_zone'])
 ).strftime(
     '%Y-%m-%d %I:%M%p'
 )

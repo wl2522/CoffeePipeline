@@ -2,14 +2,14 @@ import io
 import json
 import logging
 import traceback
+from datetime import datetime, UTC
 
 import pandas as pd
-import pytz
 import requests
-
 from box_sdk_gen.box.errors import BoxAPIError
 from box_sdk_gen.managers.uploads import (PreflightFileUploadCheckParent,
                                           UploadFileVersionAttributes)
+from pytz import timezone
 
 
 def catch_exception(err_type, value, trace, config, client, user,
@@ -18,11 +18,8 @@ def catch_exception(err_type, value, trace, config, client, user,
     logger = logging.getLogger(__name__ + '.catch_exception')
 
     if timestamp is None:
-        timestamp = pd.to_datetime(
-            'now',
-            utc=True
-        ).tz_convert(
-            config['time_zone']
+        timestamp = datetime.now(UTC).astimezone(
+            timezone(config['time_zone'])
         ).strftime(
             '%Y-%m-%d %I:%M%p'
         )
@@ -155,11 +152,12 @@ def download_file(client, user_id, file_id, config):
         file_id
     )
 
-    upload_time = pd.to_datetime(log_file.created_at,
-                                 utc=True)
-
     # Convert the UTC timestamp to EST or EDT
-    upload_time = upload_time.tz_convert(pytz.timezone(config['time_zone']))
+    upload_time = log_file.created_at.astimezone(
+        timezone(config['time_zone'])
+    ).strftime(
+        '%Y-%m-%d %I:%M%p'
+    )
 
     logger.info('Downloading file "%s" (file ID: %s), uploaded to Box at %s',
                 log_file.name,
@@ -194,11 +192,8 @@ def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
     slack_url = 'https://hooks.slack.com/services/' + config['slack_webhook']
 
     if timestamp is None:
-        timestamp = pd.to_datetime(
-            'now',
-            utc=True
-        ).tz_convert(
-            config['time_zone']
+        timestamp = datetime.now(UTC).astimezone(
+            timezone(config['time_zone'])
         ).strftime(
             '%Y-%m-%d %I:%M%p'
         )
