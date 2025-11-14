@@ -54,9 +54,9 @@ def validate_text(note_col, adverb_list, adjective_list):
 
     Parameters
     ----------
-    notes_col : pandas Series
+    note_col : pandas Series
         The column containing the tasting notes text to validate
-    adverbs_list : list of str
+    adverb_list : list of str
         The list of valid adverbs that are allowed to appear in the notes
     adjective_list : list of str
         The list of valid adjectives that are allowed to appear in the notes
@@ -87,19 +87,21 @@ def validate_text(note_col, adverb_list, adjective_list):
         unexpected_vals.append(note_col[invalid_adverbs.index])
 
     # Find rows that are missing an adjective
-    blank_adjs = notes.loc[pd.isna(notes['adjectives']), 'adjectives']
+    blank_adjectives = notes.loc[pd.isna(notes['adjectives']), 'adjectives']
 
-    if not blank_adjs.empty:
-        unexpected_vals.append(note_col[blank_adjs.index])
+    if not blank_adjectives.empty:
+        unexpected_vals.append(note_col[blank_adjectives.index])
 
     # Avoid raising TypeError by excluding notes containing only one word
     # (for old records where balance was only described as "Light" or "Heavy")
-    invalid_adjs = notes.loc[pd.notna(notes['adjectives']), 'adjectives']
+    invalid_adjectives = notes.loc[pd.notna(notes['adjectives']), 'adjectives']
 
-    invalid_adjs = invalid_adjs.loc[~invalid_adjs.isin(adjective_list)]
+    invalid_adjectives = invalid_adjectives.loc[
+        ~invalid_adjectives.isin(adjective_list)
+    ]
 
-    if not invalid_adjs.empty:
-        unexpected_vals.append(note_col[invalid_adjs.index])
+    if not invalid_adjectives.empty:
+        unexpected_vals.append(note_col[invalid_adjectives.index])
 
     # Check for any extra words/characters that may be present
     if notes.shape[1] > 2:
