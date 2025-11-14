@@ -6,7 +6,7 @@ folder_id:
 log_file_id:
 
 local_fname: 'coffee_guru_log.csv'
-auth_fname: 'config.json'
+auth_fname: 'config/config.json'
 logging_fname: 'coffee_guru.log'
 create_script: 'create_coffee_tables.sql'
 insert_script: 'load_coffee_logs.sql'
