@@ -118,7 +118,6 @@ def preprocess_data(logs):
 
         grind_setting_range = config['grind_setting_ranges'][grinder_name]
 
-
         validate_grind_settings(
             grind_col=logs.loc[logs['Grinder'].eq(grinder), 'Grind'],
             min_val=grind_setting_range['min'],
@@ -155,8 +154,7 @@ if __name__ == '__main__':
     log_file_id = get_file_id(file_name=fname,
                               client=session_client,
                               user_id=config['user_id'],
-                              folder_id=config['folder_id'],
-                              config=config)
+                              folder_id=config['folder_id'])
 
     df = download_file(client=session_client,
                        user_id=config['user_id'],
@@ -174,7 +172,8 @@ if __name__ == '__main__':
     # Upload the log file to Box whenever the script terminates
     atexit.register(upload_log_file,
                     client=session_client,
-                    user=app_user,
+                    user_id=config['user_id'],
                     folder_id=config['folder_id'],
                     file_id=config['log_file_id'],
+                    config=config,
                     log_fname=config['logging_fname'])

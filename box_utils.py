@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import traceback
@@ -7,7 +8,8 @@ import pytz
 import requests
 
 from box_sdk_gen.box.errors import BoxAPIError
-from box_sdk_gen.managers.uploads import PreflightFileUploadCheckParent
+from box_sdk_gen.managers.uploads import (PreflightFileUploadCheckParent,
+                                          UploadFileVersionAttributes)
 
 
 def catch_exception(err_type, value, trace, config, client, user,
@@ -47,15 +49,16 @@ def catch_exception(err_type, value, trace, config, client, user,
     logger.error('Pipeline failed with error: %s',
                  error_msg)
     upload_log_file(client=client,
-                    user=user,
+                    user_id=user,
                     folder_id=config['folder_id'],
                     file_id=config['log_file_id'],
+                    config=config,
                     log_fname=config['logging_fname'])
 
     raise err_type
 
 
-def get_file_id(file_name, client, user_id, folder_id, config):
+def get_file_id(file_name, client, user_id, folder_id):
     """Get the file ID associated with each day's log file.
 
     Since the Box API doesn't support downloading a file
@@ -77,10 +80,10 @@ def get_file_id(file_name, client, user_id, folder_id, config):
 
     Parameters
     ----------
+    file_name : str
     client : box_sdk_gen BoxClient
     user_id : str
     folder_id : str
-    config : dict
 
     Returns
     -------
@@ -183,7 +186,7 @@ def download_file(client, user_id, file_id, config):
     return logs
 
 
-def upload_log_file(client, user, folder_id, file_id, log_fname, config,
+def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
                     timestamp=None):
     """Update the copy of the logging file stored in the Box folder."""
     logger = logging.getLogger(__name__ + '.upload_log_file')
@@ -200,13 +203,21 @@ def upload_log_file(client, user, folder_id, file_id, log_fname, config,
             '%Y-%m-%d %I:%M%p'
         )
 
-
     try:
         logger.info('Updating existing log file %s in Box folder %s...',
                     file_id,
                     folder_id)
 
-        client.as_user(user).file(file_id).update_contents(log_fname)
+        with open(log_fname, 'rb') as f:
+            log_stream = f.read()
+
+        client.with_as_user_header(
+            user_id=user_id
+        ).uploads.upload_file_version(
+            file_id,
+            UploadFileVersionAttributes(name=config['logging_fname']),
+            io.BytesIO(log_stream)
+        )
 
     except BoxAPIError as e:
         if e.message == 'Not Found':
@@ -216,7 +227,7 @@ def upload_log_file(client, user, folder_id, file_id, log_fname, config,
                            'file ID of the newly uploaded log file)',
                            folder_id)
 
-            file = client.as_user(user).folder(folder_id).upload(log_fname)
+            file = client.as_user(user_id).folder(folder_id).upload(log_fname)
 
             upload_msg = (f'"{timestamp}": `Uploaded {log_fname} to Box '
                           f"folder {folder_id} with new file ID: {file.id}! "
