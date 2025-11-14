@@ -17,7 +17,7 @@ from log_utils import (check_nan_values, check_scores, validate_text,
                        send_slack_notification)
 
 
-with open('config.yml', encoding='utf-8') as config_file:
+with open('config/config.yml', encoding='utf-8') as config_file:
     config = load(config_file, Loader=SafeLoader)
 
 DATESTAMP = pd.to_datetime(
