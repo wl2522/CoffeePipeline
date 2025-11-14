@@ -1,4 +1,7 @@
-"""Data pipeline for inserting coffee brewing logs into a SQLite3 database."""
+"""Data pipeline for inserting brewing logs into a SQLite3 database from the
+coffee.guru app.
+
+"""
 import functools
 import logging
 import re
@@ -58,9 +61,9 @@ def preprocess_data(logs):
     Therefore, the column associated with this field needs to be parsed
     and split into separate columns.
 
-    Note: The coffee logs table uses the brew_date column as the primary key.
-    Existing records with the same brew date as a record that's being inserted
-    will be deleted and overwritten with the new record.
+    Note: The coffee.guru logs table uses the brew_date column as the primary
+    key. Existing records with the same brew date as a record that's being
+    inserted will be deleted and overwritten with the new record.
     """
     logger = logging.getLogger(__name__ + '.preprocess_data')
 
