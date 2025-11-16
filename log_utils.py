@@ -173,26 +173,26 @@ def validate_grind_settings(grind_col, min_val, max_val):
         raise ValueError(err_msg)
 
 
-def update_table(logs, config):
+def update_table(logs, db_name, create_script_fname, insert_script_fname):
     """Update the local SQLite3 database with the data downloaded from Box."""
     logger = logging.getLogger(__name__ + '.update_table')
 
-    conn = sqlite3.connect(config['db_name'])
+    conn = sqlite3.connect(db_name)
 
     # Create the table if it doesn't already exist
-    with open(config['create_script'], encoding='utf-8') as create_statement:
+    with open(create_script_fname, encoding='utf-8') as create_statement:
         conn.executescript(create_statement.read())
         conn.commit()
 
     logs.to_sql('raw_logs', con=conn, if_exists='replace', index=False)
 
-    with open(config['insert_script'], encoding='utf-8') as insert_statement:
+    with open(insert_script_fname, encoding='utf-8') as insert_statement:
         conn.execute(insert_statement.read())
         conn.commit()
 
     conn.close()
 
-    logger.info('Successfully updated %s!', config['db_name'])
+    logger.info('Successfully updated %s!', db_name)
 
 
 def send_slack_notification(timestamp, config):

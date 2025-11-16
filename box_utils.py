@@ -13,7 +13,7 @@ from pytz import timezone
 
 
 def catch_exception(err_type, value, trace, config, client, user,
-                    timestamp=None):
+                    log_folder_id, log_file_id, log_filename, timestamp=None):
     """Report any exceptions that were raised during the pipeline run."""
     logger = logging.getLogger(__name__ + '.catch_exception')
 
@@ -47,10 +47,10 @@ def catch_exception(err_type, value, trace, config, client, user,
                  error_msg)
     upload_log_file(client=client,
                     user_id=user,
-                    folder_id=config['folder_id'],
-                    file_id=config['log_file_id'],
+                    folder_id=log_folder_id,
+                    file_id=log_file_id,
                     config=config,
-                    log_fname=config['logging_fname'])
+                    log_fname=log_filename)
 
     raise err_type
 
@@ -117,7 +117,7 @@ def get_file_id(file_name, client, user_id, folder_id):
         logger.info('Found file "%s" in folder ID %s!',
                     file_name,
                     folder_id)
-
+        logger.info("%s", str(e))
         file_id = e.response_info.body['context_info']['conflicts']['id']
 
         logger.info('Found file ID %s associated with file name %s!',
@@ -127,7 +127,7 @@ def get_file_id(file_name, client, user_id, folder_id):
         return file_id
 
 
-def download_file(client, user_id, file_id, config):
+def download_file(client, user_id, file_id, local_fname, config):
     """Download the log file that should be uploaded daily.
 
     Parameters
@@ -135,6 +135,7 @@ def download_file(client, user_id, file_id, config):
     client : boxsdk Client
     user_id : str
     file_id : str
+    local_fname : str
     config : dict
 
     Returns
@@ -165,7 +166,7 @@ def download_file(client, user_id, file_id, config):
                 str(upload_time))
 
     # Download the matching search result using the log file ID
-    with open(config['local_fname'], mode='wb') as log_stream:
+    with open(local_fname, mode='wb') as log_stream:
         client.with_as_user_header(
             user_id=user_id
         ).downloads.download_file_to_output_stream(
@@ -175,13 +176,7 @@ def download_file(client, user_id, file_id, config):
 
     logger.info('Downloaded file ID: %s as "%s"!',
                 file_id,
-                config['local_fname'])
-
-    logs = pd.read_csv(config['local_fname'],
-                       sep=';',
-                       iterator=False)
-
-    return logs
+                local_fname)
 
 
 def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
@@ -210,7 +205,7 @@ def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
             user_id=user_id
         ).uploads.upload_file_version(
             file_id,
-            UploadFileVersionAttributes(name=config['logging_fname']),
+            UploadFileVersionAttributes(name=log_fname),
             io.BytesIO(log_stream)
         )
 

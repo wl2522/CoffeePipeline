@@ -34,8 +34,10 @@ main_logger = logging.getLogger(__name__)
 main_logger.setLevel(logging.INFO)
 
 print_handler = logging.StreamHandler(stream=sys.stdout)
-file_handler = logging.FileHandler(filename=config['logging_fname'],
-                                   mode='a')
+file_handler = logging.FileHandler(
+    filename=config['coffee_guru']['logging_fname'],
+    mode='a'
+)
 formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
@@ -84,9 +86,10 @@ def preprocess_data(logs):
 
     logs = logs.drop('Note', axis=1)
     logs = pd.concat([logs, notes], axis=1)
-    logs.to_csv(config['local_fname'], index=False)
+    logs.to_csv(config['coffee_guru']['local_fname'], index=False)
 
-    logger.info('Saved the downloaded data to %s!', config['local_fname'])
+    logger.info('Saved the downloaded data to %s!',
+                config['coffee_guru']['local_fname'])
 
     # Validate the columns containing user inputted data
     check_nan_values(logs)
@@ -142,25 +145,48 @@ if __name__ == '__main__':
         config=config,
         client=session_client,
         user=app_user,
+        log_folder_id=config['coffee_guru']['folder_id'],
+        log_file_id=config['coffee_guru']['log_file_id'],
+        log_filename=config['coffee_guru']['logging_fname'],
         timestamp=DATESTAMP
     )
 
     # Check if the latest log file was exported to Box from the coffee.guru app
     fname_date_suffix = f"_{pd.to_datetime('today').strftime('%d%m%Y')}.csv"
-    fname = config['local_fname'].replace('.csv', fname_date_suffix)
+    fname = config['coffee_guru']['local_fname'].replace(
+        '.csv',
+        fname_date_suffix
+    )
 
-    log_file_id = get_file_id(file_name=fname,
-                              client=session_client,
-                              user_id=config['user_id'],
-                              folder_id=config['folder_id'])
+    log_file_id = get_file_id(
+        file_name=fname,
+        client=session_client,
+        user_id=config['user_id'],
+        folder_id=config['coffee_guru']['folder_id']
+    )
 
-    df = download_file(client=session_client,
-                       user_id=config['user_id'],
-                       file_id=log_file_id,
-                       config=config)
+    download_file(
+        client=session_client,
+        user_id=config['user_id'],
+        file_id=log_file_id,
+        local_fname=config['coffee_guru']['local_fname'],
+        config=config
+    )
+
+    df = pd.read_csv(
+        config['coffee_guru']['local_fname'],
+        sep=';',
+        iterator=False
+    )
+
     df = preprocess_data(logs=df)
 
-    update_table(logs=df, config=config)
+    update_table(
+        logs=df,
+        db_name=config['db_name'],
+        insert_script_fname=config['coffee_guru']['insert_script'],
+        create_script_fname=config['coffee_guru']['create_script']
+    )
 
     send_slack_notification(timestamp=DATESTAMP,
                             config=config)
@@ -168,10 +194,12 @@ if __name__ == '__main__':
     main_logger.info('Pipeline finished running!')
 
     # Upload the log file to Box whenever the script terminates
-    atexit.register(upload_log_file,
-                    client=session_client,
-                    user_id=config['user_id'],
-                    folder_id=config['folder_id'],
-                    file_id=config['log_file_id'],
-                    config=config,
-                    log_fname=config['logging_fname'])
+    atexit.register(
+        upload_log_file,
+        client=session_client,
+        user_id=config['user_id'],
+        folder_id=config['coffee_guru']['folder_id'],
+        file_id=config['coffee_guru']['log_file_id'],
+        config=config,
+        log_fname=config['coffee_guru']['logging_fname']
+    )

@@ -2,21 +2,36 @@
 # The Box API requires ID values to be cast as strings
 user_id:
 app_user_id:
-folder_id:
-log_file_id:
 
-local_fname: 'coffee_guru_log.csv'
 auth_fname: 'config/config.json'
-logging_fname: 'coffee_guru.log'
-create_script: 'create_coffee_tables.sql'
-insert_script: 'load_coffee_logs.sql'
 db_name: 'coffee_guru.db'
 slack_webhook: ''
 time_zone: ''
 request_timeout: 120
 
-grind_setting_ranges:
+# Set config values that are specific to each app
+coffee_guru:
+    folder_id: ''
+    log_file_id: ''
+    local_fname: 'coffee_guru_log.csv'
+    logging_fname: 'coffee_guru.log'
+    create_script: 'create_coffee_tables.sql'
+    insert_script: 'load_coffee_logs.sql'
+beanconqueror:
+    folder_id: ''
+    log_file_id: ''
+    local_fname: 'Beanconqueror.zip'
+    logging_fname: 'beanconqueror.log'
+    create_script: 'create_coffee_tables.sql'
+    insert_script: ''
 
+grind_setting_ranges:
+    baratza_encore:
+        min: 1
+        max: 20
+    1zpresso_x_ultra:
+        min: 0
+        max: 279
 descriptors:
     adverbs:
         - ''
