@@ -15,14 +15,14 @@ coffee_guru:
     log_file_id: ''
     local_fname: 'coffee_guru_log.csv'
     logging_fname: 'coffee_guru.log'
-    create_script: 'create_coffee_tables.sql'
-    insert_script: 'load_coffee_logs.sql'
+    create_script: 'sql/create_coffee_tables.sql'
+    insert_script: 'sql/load_coffee_logs.sql'
 beanconqueror:
     folder_id: ''
     log_file_id: ''
     local_fname: 'Beanconqueror.zip'
     logging_fname: 'beanconqueror.log'
-    create_script: 'create_coffee_tables.sql'
+    create_script: 'sql/create_coffee_tables.sql'
     insert_script: ''
 
 grind_setting_ranges:
