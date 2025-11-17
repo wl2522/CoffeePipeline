@@ -179,6 +179,57 @@ def download_file(client, user_id, file_id, local_fname, config):
                 local_fname)
 
 
+def rename_file(client, user_id, file_id, new_fname, config):
+    """Rename an existing file stored in the Box folder.
+
+    Parameters
+    ----------
+    client : boxsdk Client
+    user_id : str
+    file_id : str
+    new_fname : str
+    config : dict
+
+    Returns
+    -------
+    None
+
+    """
+    logger = logging.getLogger(__name__ + '.rename_file')
+
+    # Get the file's metadata for logging purposes
+    file = client.with_as_user_header(
+        user_id=config['user_id']
+    ).files.get_file_by_id(
+        file_id
+    )
+
+    # Convert the UTC timestamp to EST or EDT
+    upload_time = file.created_at.astimezone(
+        timezone(config['time_zone'])
+    ).strftime(
+        '%Y-%m-%d %I:%M%p'
+    )
+
+    logger.info('Renaming file "%s" (file ID: %s), uploaded to Box at %s',
+                file.name,
+                file_id,
+                str(upload_time))
+
+    # Rename the matching search result using the file ID
+    client.with_as_user_header(
+        user_id=user_id
+    ).files.update_file_by_id(
+        file_id=file_id,
+        name=new_fname
+    )
+
+    logger.info('Renamed file ID: %s from "%s" to "%s"!',
+                file_id,
+                file.name,
+                new_fname)
+
+
 def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
                     timestamp=None):
     """Update the copy of the logging file stored in the Box folder."""
