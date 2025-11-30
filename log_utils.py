@@ -173,6 +173,32 @@ def validate_grind_settings(grind_col, min_val, max_val):
         raise ValueError(err_msg)
 
 
+def insert_dfs_to_tables(dfs, create_script_fname, conn=None, db_name=None):
+    """Insert the dictionary of pandas dataframes exported from the Beanconqueror
+    app into SQL tables.
+    """
+    logger = logging.getLogger(__name__ + '.insert_dfs_to_tables')
+
+    if conn is None:
+        conn = sqlite3.connect(db_name)
+
+    # Create the tables if they don't already exist
+    with open(create_script_fname, encoding='utf-8') as create_statement:
+        conn.executescript(create_statement.read())
+        conn.commit()
+
+    for name, df in dfs.items():
+        logger.info("Updating table %s",
+                    f'beanconqueror_{name}')
+        print(name, df)
+        df.to_sql(
+            name=f'beanconqueror_{name}',
+            con=conn,
+            if_exists='replace',
+            index=False
+        )
+
+
 def update_table(logs, db_name, create_script_fname, insert_script_fname):
     """Update the local SQLite3 database with the data downloaded from Box."""
     logger = logging.getLogger(__name__ + '.update_table')
