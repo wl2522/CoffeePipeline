@@ -2,11 +2,12 @@
 coffee.guru app.
 
 """
+import atexit
 import functools
 import logging
 import re
+import sqlite3
 import sys
-import atexit
 from datetime import datetime, UTC
 
 import pandas as pd
@@ -17,8 +18,7 @@ from yaml import load, SafeLoader
 from box_utils import (catch_exception, get_file_id, download_file,
                        upload_log_file)
 from log_utils import (check_nan_values, check_scores, validate_text,
-                       validate_grind_settings, update_table,
-                       send_slack_notification)
+                       validate_grind_settings, send_slack_notification)
 
 
 with open('config/config.yml', encoding='utf-8') as config_file:
@@ -126,6 +126,30 @@ def preprocess_data(logs):
         )
 
     return logs
+
+
+def update_table(logs, db_name, create_script_fname, insert_script_fname):
+    """Update the local SQLite3 database with the data exported from the Coffee
+    Guru app and downloaded from Box.
+    """
+    logger = logging.getLogger(__name__ + '.update_table')
+
+    conn = sqlite3.connect(db_name)
+
+    # Create the table if it doesn't already exist
+    with open(create_script_fname, encoding='utf-8') as create_statement:
+        conn.executescript(create_statement.read())
+        conn.commit()
+
+    logs.to_sql('raw_logs', con=conn, if_exists='replace', index=False)
+
+    with open(insert_script_fname, encoding='utf-8') as insert_statement:
+        conn.execute(insert_statement.read())
+        conn.commit()
+
+    conn.close()
+
+    logger.info('Successfully updated %s!', db_name)
 
 
 if __name__ == '__main__':
