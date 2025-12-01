@@ -1,7 +1,7 @@
 -- Create the tables that store the Beanconqueror app logs
 CREATE TABLE IF NOT EXISTS beanconqueror_beans (
-    name VARCHAR(64),
-    roaster VARCHAR(64),
+    name VARCHAR(32),
+    roaster VARCHAR(32),
     uuid VARCHAR(64) PRIMARY KEY,
     roast VARCHAR(32),
     bean_mix VARCHAR(32),
@@ -14,9 +14,9 @@ CREATE TABLE IF NOT EXISTS beanconqueror_brews (
     uuid VARCHAR(64) PRIMARY KEY,
     grind_size INTEGER,
     grind_weight INTEGER,
-    method_of_preparation VARCHAR(64),
+    method_of_preparation VARCHAR(32),
     mill INTEGER,
-    bean VARCHAR(64),
+    bean VARCHAR(32),
     brew_temperature INTEGER,
     brew_time INTEGER,
     note TEXT,
@@ -32,13 +32,13 @@ CREATE TABLE IF NOT EXISTS beanconqueror_brews (
 );
 
 CREATE TABLE IF NOT EXISTS beanconqueror_grinders (
-    name VARCHAR(64),
+    name VARCHAR(32),
     uuid VARCHAR(64) PRIMARY KEY,
     updated_at TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS beanconqueror_methods (
-    name VARCHAR(64),
+    name VARCHAR(32),
     uuid VARCHAR(64) PRIMARY KEY,
     type VARCHAR(32),
     style_type VARCHAR(32),
@@ -46,23 +46,26 @@ CREATE TABLE IF NOT EXISTS beanconqueror_methods (
 );
 
 CREATE TABLE IF NOT EXISTS beanconqueror_method_tools (
-    name VARCHAR(64),
+    name VARCHAR(32),
     uuid VARCHAR(64) PRIMARY KEY,
-    preparation_method_name VARCHAR(64),
+    preparation_method_name VARCHAR(32),
     updated_at TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS beanconqueror_logs (
     uuid VARCHAR(64) PRIMARY KEY,
     updated_at TIMESTAMP,
+    grinder VARCHAR(32),
     grind_size INTEGER,
     grind_weight INTEGER,
-    method_of_preparation INTEGER,
-    mill INTEGER,
-    bean VARCHAR(64),
+    method VARCHAR(32),
+    grinder VARCHAR(32),
+    roaster VARCHAR(32),
+    bean VARCHAR(32),
     brew_temperature INTEGER,
     brew_time INTEGER,
-    note TEXT,
+    flavor VARCHAR(32),
+    balance VARCHAR(32),
     rating INTEGER,
     coffee_first_drip_time INTEGER,
     coffee_blooming_time INTEGER,
