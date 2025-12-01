@@ -6,7 +6,7 @@ import pandas as pd
 import requests
 
 
-def check_nan_values(logs):
+def check_nan_values(logs, columns, timestamp_col):
     """Check for missing user input values prior to updating the database."""
     logger = logging.getLogger(__name__ + '.check_nan_values')
 
@@ -14,9 +14,9 @@ def check_nan_values(logs):
     nan_msgs = []
 
     # Find the timestamp of the row with the missing value
-    for col in ['Score (out of 5)', 'Bean', 'Grind', 'Flavor', 'Balance']:
+    for col in columns:
         nan_idx = np.where(pd.isnull(logs[col]))[0].tolist()
-        nan_times = pd.to_datetime(logs.iloc[nan_idx]['Timestamp'],
+        nan_times = pd.to_datetime(logs.iloc[nan_idx][timestamp_col],
                                    unit='s',
                                    utc=True
                                    ).dt.tz_convert('EST')

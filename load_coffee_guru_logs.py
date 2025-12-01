@@ -92,7 +92,18 @@ def preprocess_data(logs):
                 config['coffee_guru']['local_fname'])
 
     # Validate the columns containing user inputted data
-    check_nan_values(logs)
+    check_nan_values(
+        logs,
+        columns=[
+            'Score (out of 5)',
+            'Bean',
+            'Grinder',
+            'Grind',
+            'Flavor',
+            'Balance'
+        ],
+        timestamp_col='Timestamp'
+    )
     check_scores(logs['Score (out of 5)'])
 
     validate_text(note_col=logs['Flavor'],
