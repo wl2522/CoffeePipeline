@@ -4,7 +4,6 @@ import logging
 import traceback
 from datetime import datetime, UTC
 
-import pandas as pd
 import requests
 from box_sdk_gen.box.errors import BoxAPIError
 from box_sdk_gen.managers.uploads import (PreflightFileUploadCheckParent,

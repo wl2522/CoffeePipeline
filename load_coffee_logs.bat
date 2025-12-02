@@ -6,4 +6,6 @@ call conda activate coffee_logs
 
 python load_coffee_guru_logs.py
 
+python load_beanconqueror_logs.py
+
 call conda deactivate

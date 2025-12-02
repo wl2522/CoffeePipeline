@@ -223,8 +223,11 @@ if __name__ == '__main__':
         create_script_fname=config['coffee_guru']['create_script']
     )
 
-    send_slack_notification(timestamp=DATESTAMP,
-                            config=config)
+    send_slack_notification(
+        timestamp=DATESTAMP,
+        config=config,
+        fname=config['coffee_guru']['local_fname']
+    )
 
     main_logger.info('Pipeline finished running!')
 

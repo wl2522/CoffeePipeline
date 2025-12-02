@@ -172,13 +172,14 @@ def validate_grind_settings(grind_col, min_val, max_val):
         raise ValueError(err_msg)
 
 
-def send_slack_notification(timestamp, config):
+def send_slack_notification(timestamp, config, fname):
     """Use a Slack webhook URL to send a notification of a successful
     pipeline run.
     """
-    success_notif = {"status": "SUCCESS",
-                     "message": f"Successfully updated {config['db_name']}!"
-                     }
+    success_notif = {
+        "status": "SUCCESS",
+        "message": f"Successfully updated {config['db_name']} with {fname}!"
+    }
     success_msg = f'"{timestamp}": `{str(success_notif)}`'
 
     slack_url = 'https://hooks.slack.com/services/' + config['slack_webhook']
