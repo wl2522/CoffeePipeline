@@ -1,3 +1,4 @@
+-- Create the tables that store the Coffee Guru app logs
 CREATE TABLE IF NOT EXISTS raw_logs (
     "Timestamp" INT PRIMARY KEY,
     "Date" VARCHAR(16),

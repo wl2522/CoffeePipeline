@@ -1,26 +1,24 @@
+import io
 import json
 import logging
 import traceback
+from datetime import datetime, UTC
 
-import pandas as pd
-import pytz
 import requests
-
 from box_sdk_gen.box.errors import BoxAPIError
-from box_sdk_gen.managers.uploads import PreflightFileUploadCheckParent
+from box_sdk_gen.managers.uploads import (PreflightFileUploadCheckParent,
+                                          UploadFileVersionAttributes)
+from pytz import timezone
 
 
 def catch_exception(err_type, value, trace, config, client, user,
-                    timestamp=None):
+                    log_folder_id, log_file_id, log_filename, timestamp=None):
     """Report any exceptions that were raised during the pipeline run."""
     logger = logging.getLogger(__name__ + '.catch_exception')
 
     if timestamp is None:
-        timestamp = pd.to_datetime(
-            'now',
-            utc=True
-        ).tz_convert(
-            config['time_zone']
+        timestamp = datetime.now(UTC).astimezone(
+            timezone(config['time_zone'])
         ).strftime(
             '%Y-%m-%d %I:%M%p'
         )
@@ -47,15 +45,16 @@ def catch_exception(err_type, value, trace, config, client, user,
     logger.error('Pipeline failed with error: %s',
                  error_msg)
     upload_log_file(client=client,
-                    user=user,
-                    folder_id=config['folder_id'],
-                    file_id=config['log_file_id'],
-                    log_fname=config['logging_fname'])
+                    user_id=user,
+                    folder_id=log_folder_id,
+                    file_id=log_file_id,
+                    config=config,
+                    log_fname=log_filename)
 
     raise err_type
 
 
-def get_file_id(file_name, client, user_id, folder_id, config):
+def get_file_id(file_name, client, user_id, folder_id):
     """Get the file ID associated with each day's log file.
 
     Since the Box API doesn't support downloading a file
@@ -77,10 +76,10 @@ def get_file_id(file_name, client, user_id, folder_id, config):
 
     Parameters
     ----------
+    file_name : str
     client : box_sdk_gen BoxClient
     user_id : str
     folder_id : str
-    config : dict
 
     Returns
     -------
@@ -117,7 +116,7 @@ def get_file_id(file_name, client, user_id, folder_id, config):
         logger.info('Found file "%s" in folder ID %s!',
                     file_name,
                     folder_id)
-
+        logger.info("%s", str(e))
         file_id = e.response_info.body['context_info']['conflicts']['id']
 
         logger.info('Found file ID %s associated with file name %s!',
@@ -127,7 +126,7 @@ def get_file_id(file_name, client, user_id, folder_id, config):
         return file_id
 
 
-def download_file(client, user_id, file_id, config):
+def download_file(client, user_id, file_id, local_fname, config):
     """Download the log file that should be uploaded daily.
 
     Parameters
@@ -135,6 +134,7 @@ def download_file(client, user_id, file_id, config):
     client : boxsdk Client
     user_id : str
     file_id : str
+    local_fname : str
     config : dict
 
     Returns
@@ -152,11 +152,12 @@ def download_file(client, user_id, file_id, config):
         file_id
     )
 
-    upload_time = pd.to_datetime(log_file.created_at,
-                                 utc=True)
-
     # Convert the UTC timestamp to EST or EDT
-    upload_time = upload_time.tz_convert(pytz.timezone(config['time_zone']))
+    upload_time = log_file.created_at.astimezone(
+        timezone(config['time_zone'])
+    ).strftime(
+        '%Y-%m-%d %I:%M%p'
+    )
 
     logger.info('Downloading file "%s" (file ID: %s), uploaded to Box at %s',
                 log_file.name,
@@ -164,7 +165,7 @@ def download_file(client, user_id, file_id, config):
                 str(upload_time))
 
     # Download the matching search result using the log file ID
-    with open(config['local_fname'], mode='wb') as log_stream:
+    with open(local_fname, mode='wb') as log_stream:
         client.with_as_user_header(
             user_id=user_id
         ).downloads.download_file_to_output_stream(
@@ -174,16 +175,61 @@ def download_file(client, user_id, file_id, config):
 
     logger.info('Downloaded file ID: %s as "%s"!',
                 file_id,
-                config['local_fname'])
-
-    logs = pd.read_csv(config['local_fname'],
-                       sep=';',
-                       iterator=False)
-
-    return logs
+                local_fname)
 
 
-def upload_log_file(client, user, folder_id, file_id, log_fname, config,
+def rename_file(client, user_id, file_id, new_fname, config):
+    """Rename an existing file stored in the Box folder.
+
+    Parameters
+    ----------
+    client : boxsdk Client
+    user_id : str
+    file_id : str
+    new_fname : str
+    config : dict
+
+    Returns
+    -------
+    None
+
+    """
+    logger = logging.getLogger(__name__ + '.rename_file')
+
+    # Get the file's metadata for logging purposes
+    file = client.with_as_user_header(
+        user_id=config['user_id']
+    ).files.get_file_by_id(
+        file_id
+    )
+
+    # Convert the UTC timestamp to EST or EDT
+    upload_time = file.created_at.astimezone(
+        timezone(config['time_zone'])
+    ).strftime(
+        '%Y-%m-%d %I:%M%p'
+    )
+
+    logger.info('Renaming file "%s" (file ID: %s), uploaded to Box at %s',
+                file.name,
+                file_id,
+                str(upload_time))
+
+    # Rename the matching search result using the file ID
+    client.with_as_user_header(
+        user_id=user_id
+    ).files.update_file_by_id(
+        file_id=file_id,
+        name=new_fname
+    )
+
+    logger.info('Renamed file ID: %s from "%s" to "%s"!',
+                file_id,
+                file.name,
+                new_fname)
+
+
+def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
                     timestamp=None):
     """Update the copy of the logging file stored in the Box folder."""
     logger = logging.getLogger(__name__ + '.upload_log_file')
@@ -191,22 +237,27 @@ def upload_log_file(client, user, folder_id, file_id, log_fname, config,
     slack_url = 'https://hooks.slack.com/services/' + config['slack_webhook']
 
     if timestamp is None:
-        timestamp = pd.to_datetime(
-            'now',
-            utc=True
-        ).tz_convert(
-            config['time_zone']
+        timestamp = datetime.now(UTC).astimezone(
+            timezone(config['time_zone'])
         ).strftime(
             '%Y-%m-%d %I:%M%p'
         )
-
 
     try:
         logger.info('Updating existing log file %s in Box folder %s...',
                     file_id,
                     folder_id)
 
-        client.as_user(user).file(file_id).update_contents(log_fname)
+        with open(log_fname, 'rb') as f:
+            log_stream = f.read()
+
+        client.with_as_user_header(
+            user_id=user_id
+        ).uploads.upload_file_version(
+            file_id,
+            UploadFileVersionAttributes(name=log_fname),
+            io.BytesIO(log_stream)
+        )
 
     except BoxAPIError as e:
         if e.message == 'Not Found':
@@ -216,7 +267,7 @@ def upload_log_file(client, user, folder_id, file_id, log_fname, config,
                            'file ID of the newly uploaded log file)',
                            folder_id)
 
-            file = client.as_user(user).folder(folder_id).upload(log_fname)
+            file = client.as_user(user_id).folder(folder_id).upload(log_fname)
 
             upload_msg = (f'"{timestamp}": `Uploaded {log_fname} to Box '
                           f"folder {folder_id} with new file ID: {file.id}! "

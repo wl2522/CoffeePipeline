@@ -4,10 +4,9 @@ import logging
 import numpy as np
 import pandas as pd
 import requests
-import sqlite3
 
 
-def check_nan_values(logs):
+def check_nan_values(logs, columns, timestamp_col):
     """Check for missing user input values prior to updating the database."""
     logger = logging.getLogger(__name__ + '.check_nan_values')
 
@@ -15,9 +14,9 @@ def check_nan_values(logs):
     nan_msgs = []
 
     # Find the timestamp of the row with the missing value
-    for col in ['Score (out of 5)', 'Bean', 'Grind', 'Flavor', 'Balance']:
+    for col in columns:
         nan_idx = np.where(pd.isnull(logs[col]))[0].tolist()
-        nan_times = pd.to_datetime(logs.iloc[nan_idx]['Timestamp'],
+        nan_times = pd.to_datetime(logs.iloc[nan_idx][timestamp_col],
                                    unit='s',
                                    utc=True
                                    ).dt.tz_convert('EST')
@@ -54,9 +53,9 @@ def validate_text(note_col, adverb_list, adjective_list):
 
     Parameters
     ----------
-    notes_col : pandas Series
+    note_col : pandas Series
         The column containing the tasting notes text to validate
-    adverbs_list : list of str
+    adverb_list : list of str
         The list of valid adverbs that are allowed to appear in the notes
     adjective_list : list of str
         The list of valid adjectives that are allowed to appear in the notes
@@ -87,19 +86,21 @@ def validate_text(note_col, adverb_list, adjective_list):
         unexpected_vals.append(note_col[invalid_adverbs.index])
 
     # Find rows that are missing an adjective
-    blank_adjs = notes.loc[pd.isna(notes['adjectives']), 'adjectives']
+    blank_adjectives = notes.loc[pd.isna(notes['adjectives']), 'adjectives']
 
-    if not blank_adjs.empty:
-        unexpected_vals.append(note_col[blank_adjs.index])
+    if not blank_adjectives.empty:
+        unexpected_vals.append(note_col[blank_adjectives.index])
 
     # Avoid raising TypeError by excluding notes containing only one word
     # (for old records where balance was only described as "Light" or "Heavy")
-    invalid_adjs = notes.loc[pd.notna(notes['adjectives']), 'adjectives']
+    invalid_adjectives = notes.loc[pd.notna(notes['adjectives']), 'adjectives']
 
-    invalid_adjs = invalid_adjs.loc[~invalid_adjs.isin(adjective_list)]
+    invalid_adjectives = invalid_adjectives.loc[
+        ~invalid_adjectives.isin(adjective_list)
+    ]
 
-    if not invalid_adjs.empty:
-        unexpected_vals.append(note_col[invalid_adjs.index])
+    if not invalid_adjectives.empty:
+        unexpected_vals.append(note_col[invalid_adjectives.index])
 
     # Check for any extra words/characters that may be present
     if notes.shape[1] > 2:
@@ -171,35 +172,14 @@ def validate_grind_settings(grind_col, min_val, max_val):
         raise ValueError(err_msg)
 
 
-def update_table(logs, config):
-    """Update the local SQLite3 database with the data downloaded from Box."""
-    logger = logging.getLogger(__name__ + '.update_table')
-
-    conn = sqlite3.connect(config['db_name'])
-
-    # Create the table if it doesn't already exist
-    with open(config['create_script'], encoding='utf-8') as create_statement:
-        conn.executescript(create_statement.read())
-        conn.commit()
-
-    logs.to_sql('raw_logs', con=conn, if_exists='replace', index=False)
-
-    with open(config['insert_script'], encoding='utf-8') as insert_statement:
-        conn.execute(insert_statement.read())
-        conn.commit()
-
-    conn.close()
-
-    logger.info('Successfully updated %s!', config['db_name'])
-
-
-def send_slack_notification(timestamp, config):
+def send_slack_notification(timestamp, config, fname):
     """Use a Slack webhook URL to send a notification of a successful
     pipeline run.
     """
-    success_notif = {"status": "SUCCESS",
-                     "message": f"Successfully updated {config['db_name']}!"
-                     }
+    success_notif = {
+        "status": "SUCCESS",
+        "message": f"Successfully updated {config['db_name']} with {fname}!"
+    }
     success_msg = f'"{timestamp}": `{str(success_notif)}`'
 
     slack_url = 'https://hooks.slack.com/services/' + config['slack_webhook']

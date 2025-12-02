@@ -1,0 +1,22 @@
+INSERT OR REPLACE INTO beanconqueror_logs
+    SELECT uuid,
+        updated_at,
+        grinder,
+        grind_size,
+        grind_weight,
+        method,
+        roaster,
+        bean,
+        brew_temperature,
+        brew_time,
+        rating,
+        flavor,
+        balance,
+        coffee_first_drip_time,
+        coffee_blooming_time,
+        brew_beverage_quantity,
+        brew_beverage_quantity_type,
+        method_of_preparation_tools,
+        favourite,
+        best_brew
+    FROM beanconqueror_logs_tmp;

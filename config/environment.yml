@@ -6,6 +6,7 @@ dependencies:
     - pip
     - numpy=2.3.4
     - pandas=2.3.3
+    - pytz
     - pyyaml=6.0.3
     - requests=2.32.5
     - pip:

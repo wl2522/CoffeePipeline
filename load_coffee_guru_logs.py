@@ -1,30 +1,31 @@
-"""Data pipeline for inserting coffee brewing logs into a SQLite3 database."""
+"""Data pipeline for inserting brewing logs into a SQLite3 database from the
+coffee.guru app.
+
+"""
+import atexit
 import functools
 import logging
 import re
+import sqlite3
 import sys
-import atexit
+from datetime import datetime, UTC
 
 import pandas as pd
-
-from yaml import load, SafeLoader
 from box_sdk_gen import BoxClient, BoxJWTAuth, JWTConfig
+from pytz import timezone
+from yaml import load, SafeLoader
 
 from box_utils import (catch_exception, get_file_id, download_file,
                        upload_log_file)
 from log_utils import (check_nan_values, check_scores, validate_text,
-                       validate_grind_settings, update_table,
-                       send_slack_notification)
+                       validate_grind_settings, send_slack_notification)
 
 
 with open('config/config.yml', encoding='utf-8') as config_file:
     config = load(config_file, Loader=SafeLoader)
 
-DATESTAMP = pd.to_datetime(
-    'now',
-    utc=True
-).tz_convert(
-    config['time_zone']
+DATESTAMP = datetime.now(UTC).astimezone(
+    timezone(config['time_zone'])
 ).strftime(
     '%Y-%m-%d %I:%M%p'
 )
@@ -33,8 +34,10 @@ main_logger = logging.getLogger(__name__)
 main_logger.setLevel(logging.INFO)
 
 print_handler = logging.StreamHandler(stream=sys.stdout)
-file_handler = logging.FileHandler(filename=config['logging_fname'],
-                                   mode='a')
+file_handler = logging.FileHandler(
+    filename=config['coffee_guru']['logging_fname'],
+    mode='a'
+)
 formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
@@ -58,9 +61,9 @@ def preprocess_data(logs):
     Therefore, the column associated with this field needs to be parsed
     and split into separate columns.
 
-    Note: The coffee logs table uses the brew_date column as the primary key.
-    Existing records with the same brew date as a record that's being inserted
-    will be deleted and overwritten with the new record.
+    Note: The coffee.guru logs table uses the brew_date column as the primary
+    key. Existing records with the same brew date as a record that's being
+    inserted will be deleted and overwritten with the new record.
     """
     logger = logging.getLogger(__name__ + '.preprocess_data')
 
@@ -83,12 +86,24 @@ def preprocess_data(logs):
 
     logs = logs.drop('Note', axis=1)
     logs = pd.concat([logs, notes], axis=1)
-    logs.to_csv(config['local_fname'], index=False)
+    logs.to_csv(config['coffee_guru']['local_fname'], index=False)
 
-    logger.info('Saved the downloaded data to %s!', config['local_fname'])
+    logger.info('Saved the downloaded data to %s!',
+                config['coffee_guru']['local_fname'])
 
     # Validate the columns containing user inputted data
-    check_nan_values(logs)
+    check_nan_values(
+        logs,
+        columns=[
+            'Score (out of 5)',
+            'Bean',
+            'Grinder',
+            'Grind',
+            'Flavor',
+            'Balance'
+        ],
+        timestamp_col='Timestamp'
+    )
     check_scores(logs['Score (out of 5)'])
 
     validate_text(note_col=logs['Flavor'],
@@ -115,7 +130,6 @@ def preprocess_data(logs):
 
         grind_setting_range = config['grind_setting_ranges'][grinder_name]
 
-
         validate_grind_settings(
             grind_col=logs.loc[logs['Grinder'].eq(grinder), 'Grind'],
             min_val=grind_setting_range['min'],
@@ -123,6 +137,30 @@ def preprocess_data(logs):
         )
 
     return logs
+
+
+def update_table(logs, db_name, create_script_fname, insert_script_fname):
+    """Update the local SQLite3 database with the data exported from the Coffee
+    Guru app and downloaded from Box.
+    """
+    logger = logging.getLogger(__name__ + '.update_table')
+
+    conn = sqlite3.connect(db_name)
+
+    # Create the table if it doesn't already exist
+    with open(create_script_fname, encoding='utf-8') as create_statement:
+        conn.executescript(create_statement.read())
+        conn.commit()
+
+    logs.to_sql('raw_logs', con=conn, if_exists='replace', index=False)
+
+    with open(insert_script_fname, encoding='utf-8') as insert_statement:
+        conn.execute(insert_statement.read())
+        conn.commit()
+
+    conn.close()
+
+    logger.info('Successfully updated %s!', db_name)
 
 
 if __name__ == '__main__':
@@ -142,36 +180,64 @@ if __name__ == '__main__':
         config=config,
         client=session_client,
         user=app_user,
+        log_folder_id=config['coffee_guru']['folder_id'],
+        log_file_id=config['coffee_guru']['log_file_id'],
+        log_filename=config['coffee_guru']['logging_fname'],
         timestamp=DATESTAMP
     )
 
     # Check if the latest log file was exported to Box from the coffee.guru app
     fname_date_suffix = f"_{pd.to_datetime('today').strftime('%d%m%Y')}.csv"
-    fname = config['local_fname'].replace('.csv', fname_date_suffix)
+    fname = config['coffee_guru']['local_fname'].replace(
+        '.csv',
+        fname_date_suffix
+    )
 
-    log_file_id = get_file_id(file_name=fname,
-                              client=session_client,
-                              user_id=config['user_id'],
-                              folder_id=config['folder_id'],
-                              config=config)
+    log_file_id = get_file_id(
+        file_name=fname,
+        client=session_client,
+        user_id=config['user_id'],
+        folder_id=config['coffee_guru']['folder_id']
+    )
 
-    df = download_file(client=session_client,
-                       user_id=config['user_id'],
-                       file_id=log_file_id,
-                       config=config)
+    download_file(
+        client=session_client,
+        user_id=config['user_id'],
+        file_id=log_file_id,
+        local_fname=config['coffee_guru']['local_fname'],
+        config=config
+    )
+
+    df = pd.read_csv(
+        config['coffee_guru']['local_fname'],
+        sep=';',
+        iterator=False
+    )
+
     df = preprocess_data(logs=df)
 
-    update_table(logs=df, config=config)
+    update_table(
+        logs=df,
+        db_name=config['db_name'],
+        insert_script_fname=config['coffee_guru']['insert_script'],
+        create_script_fname=config['coffee_guru']['create_script']
+    )
 
-    send_slack_notification(timestamp=DATESTAMP,
-                            config=config)
+    send_slack_notification(
+        timestamp=DATESTAMP,
+        config=config,
+        fname=config['coffee_guru']['local_fname']
+    )
 
     main_logger.info('Pipeline finished running!')
 
     # Upload the log file to Box whenever the script terminates
-    atexit.register(upload_log_file,
-                    client=session_client,
-                    user=app_user,
-                    folder_id=config['folder_id'],
-                    file_id=config['log_file_id'],
-                    log_fname=config['logging_fname'])
+    atexit.register(
+        upload_log_file,
+        client=session_client,
+        user_id=config['user_id'],
+        folder_id=config['coffee_guru']['folder_id'],
+        file_id=config['coffee_guru']['log_file_id'],
+        config=config,
+        log_fname=config['coffee_guru']['logging_fname']
+    )
