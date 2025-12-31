@@ -1,8 +1,12 @@
 *.csv
 *.db
 *.log
+*.wksp
+*.xlsx
+*.zip
 *pylint.d
 __pycache__
+.idea/*
 # Ignore these files because they contain sensitive data
 config.json
 config.yml
