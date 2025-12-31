@@ -9,6 +9,11 @@ slack_webhook: ''
 time_zone: ''
 request_timeout: 120
 
+# Rotate in a new log file every 2 weeks
+log_rotation: '2 weeks'
+# Retain at most 1 log file that has been rotated out
+log_retention: 1
+
 # Set config values that are specific to each app
 coffee_guru:
     folder_id: ''

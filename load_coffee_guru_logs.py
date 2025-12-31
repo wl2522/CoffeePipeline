@@ -34,10 +34,8 @@ logger.add(
     config['coffee_guru']['logging_fname'],
     mode='a',
     delay=True,
-    # Swap in a new log file every 2 weeks
-    rotation='2 weeks',
-    # Retain a log file for another 2 weeks after it's swapped out
-    retention='4 weeks'
+    rotation=config['log_rotation'],
+    retention=config['log_retention']
 )
 
 

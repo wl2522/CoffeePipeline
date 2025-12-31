@@ -10,3 +10,5 @@ __pycache__
 # Ignore these files because they contain sensitive data
 config.json
 config.yml
+# Ignore the daily Beanconqueror logs JSON file
+Beanconqueror.json

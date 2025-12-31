@@ -3,6 +3,7 @@ channels:
     - conda-forge
 dependencies:
     - python=3.13
+    - ipykernel
     - pip
     - loguru
     - numpy=2.3.4
