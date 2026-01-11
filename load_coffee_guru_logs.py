@@ -4,7 +4,6 @@ coffee.guru app.
 """
 import atexit
 import functools
-import logging
 import re
 import sqlite3
 import sys
@@ -12,6 +11,7 @@ from datetime import datetime, UTC
 
 import pandas as pd
 from box_sdk_gen import BoxClient, BoxJWTAuth, JWTConfig
+from loguru import logger
 from pytz import timezone
 from yaml import load, SafeLoader
 
@@ -30,22 +30,13 @@ DATESTAMP = datetime.now(UTC).astimezone(
     '%Y-%m-%d %I:%M%p'
 )
 
-main_logger = logging.getLogger(__name__)
-main_logger.setLevel(logging.INFO)
-
-print_handler = logging.StreamHandler(stream=sys.stdout)
-file_handler = logging.FileHandler(
-    filename=config['coffee_guru']['logging_fname'],
-    mode='a'
+logger.add(
+    config['coffee_guru']['logging_fname'],
+    mode='a',
+    delay=True,
+    rotation=config['log_rotation'],
+    retention=config['log_retention']
 )
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-
-print_handler.setFormatter(formatter)
-file_handler.setFormatter(formatter)
-main_logger.addHandler(print_handler)
-main_logger.addHandler(file_handler)
 
 
 def preprocess_data(logs):
@@ -65,8 +56,6 @@ def preprocess_data(logs):
     key. Existing records with the same brew date as a record that's being
     inserted will be deleted and overwritten with the new record.
     """
-    logger = logging.getLogger(__name__ + '.preprocess_data')
-
     # Delete the unit of measurement (grams) to convert the column to integers
     logs['Coffee'] = logs['Coffee'].str.replace(' g', '')
 
@@ -88,7 +77,7 @@ def preprocess_data(logs):
     logs = pd.concat([logs, notes], axis=1)
     logs.to_csv(config['coffee_guru']['local_fname'], index=False)
 
-    logger.info('Saved the downloaded data to %s!',
+    logger.info('Saved the downloaded data to {}!',
                 config['coffee_guru']['local_fname'])
 
     # Validate the columns containing user inputted data
@@ -118,12 +107,13 @@ def preprocess_data(logs):
     # Validate only the grind settings column
     # (because non-missing scores from the app must be integer values from 1-5)
     for grinder in logs['Grinder'].unique():
-        logger.info("Validating grind setting values for grinder %s", grinder)
+        logger.info("Validating grind setting values for grinder {}",
+                    grinder)
 
         grinder_name = re.sub(r'\s+|-', '_', grinder.lower())
 
         if grinder_name not in config['grind_setting_ranges']:
-            logger.error("Grind settings range not set for grinder %s!",
+            logger.error("Grind settings range not set for grinder {}!",
                          grinder)
 
             raise ValueError
@@ -143,8 +133,6 @@ def update_table(logs, db_name, create_script_fname, insert_script_fname):
     """Update the local SQLite3 database with the data exported from the Coffee
     Guru app and downloaded from Box.
     """
-    logger = logging.getLogger(__name__ + '.update_table')
-
     conn = sqlite3.connect(db_name)
 
     # Create the table if it doesn't already exist
@@ -160,7 +148,7 @@ def update_table(logs, db_name, create_script_fname, insert_script_fname):
 
     conn.close()
 
-    logger.info('Successfully updated %s!', db_name)
+    logger.info('Successfully updated {}!', db_name)
 
 
 if __name__ == '__main__':
@@ -172,8 +160,8 @@ if __name__ == '__main__':
         user_id=config['app_user_id']
     )
 
-    main_logger.info('Successfully authenticated as Box API app user "%s"!',
-                     app_user.name)
+    logger.info('Successfully authenticated as Box API app user "{}"!',
+                app_user.name)
 
     sys.excepthook = functools.partial(
         catch_exception,
@@ -229,7 +217,7 @@ if __name__ == '__main__':
         fname=config['coffee_guru']['local_fname']
     )
 
-    main_logger.info('Pipeline finished running!')
+    logger.info('Pipeline finished running!')
 
     # Upload the log file to Box whenever the script terminates
     atexit.register(

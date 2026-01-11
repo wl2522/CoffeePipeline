@@ -1,15 +1,13 @@
 import json
-import logging
 
 import numpy as np
 import pandas as pd
 import requests
+from loguru import logger
 
 
 def check_nan_values(logs, columns, timestamp_col):
     """Check for missing user input values prior to updating the database."""
-    logger = logging.getLogger(__name__ + '.check_nan_values')
-
     # Find the row indices containing missing values for each user input column
     nan_msgs = []
 
@@ -36,8 +34,6 @@ def check_nan_values(logs, columns, timestamp_col):
 
 def check_scores(score_col):
     """Check for rows that where a score was not submitted (score = 0)."""
-    logger = logging.getLogger(__name__ + '.check_scores')
-
     unscored_idx = score_col[score_col == 0].index.tolist()
 
     if unscored_idx:
@@ -65,8 +61,6 @@ def validate_text(note_col, adverb_list, adjective_list):
     None
 
     """
-    logger = logging.getLogger(__name__ + '.validate_text')
-
     notes = note_col.str.split(' ', expand=True)
     unexpected_vals = []
     err_msgs = []
@@ -141,8 +135,6 @@ def validate_grind_settings(grind_col, min_val, max_val):
     None
 
     """
-    logger = logging.getLogger(__name__ + '.validate_grind_settings')
-
     if not pd.api.types.is_integer_dtype(grind_col.dtype):
         # Check if the column consists entirely of integers in string form
         try:

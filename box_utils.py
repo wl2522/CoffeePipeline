@@ -1,6 +1,6 @@
 import io
 import json
-import logging
+from loguru import logger
 import traceback
 from datetime import datetime, UTC
 
@@ -14,8 +14,6 @@ from pytz import timezone
 def catch_exception(err_type, value, trace, config, client, user,
                     log_folder_id, log_file_id, log_filename, timestamp=None):
     """Report any exceptions that were raised during the pipeline run."""
-    logger = logging.getLogger(__name__ + '.catch_exception')
-
     if timestamp is None:
         timestamp = datetime.now(UTC).astimezone(
             timezone(config['time_zone'])
@@ -42,8 +40,9 @@ def catch_exception(err_type, value, trace, config, client, user,
                   timeout=config['request_timeout'])
 
     # Log the exception and update the log file on Slack
-    logger.error('Pipeline failed with error: %s',
+    logger.error('Pipeline failed with error: {}',
                  error_msg)
+
     upload_log_file(client=client,
                     user_id=user,
                     folder_id=log_folder_id,
@@ -87,9 +86,7 @@ def get_file_id(file_name, client, user_id, folder_id):
         The file ID that was assigned to the log file by Box
 
     """
-    logger = logging.getLogger(__name__ + '.check_for_file')
-
-    logger.info('Checking folder ID %s for file %s',
+    logger.info('Checking folder ID {} for file {}',
                 folder_id,
                 file_name)
 
@@ -107,19 +104,21 @@ def get_file_id(file_name, client, user_id, folder_id):
 
         # Raise an error if the preflight check succeeds (file doesn't exist)
         err_msg = f"Box folder doesn't contain any file named {file_name}!"
+
         logger.exception(err_msg)
 
         raise RuntimeError(err_msg)
 
     # Return the file ID if the file already exists in the folder
     except BoxAPIError as e:
-        logger.info('Found file "%s" in folder ID %s!',
+        logger.info('Found file "{}" in folder ID {}!',
                     file_name,
                     folder_id)
-        logger.info("%s", str(e))
+        logger.info("{}", str(e))
+
         file_id = e.response_info.body['context_info']['conflicts']['id']
 
-        logger.info('Found file ID %s associated with file name %s!',
+        logger.info('Found file ID {} associated with file name {}!',
                     file_id,
                     file_name)
 
@@ -143,8 +142,6 @@ def download_file(client, user_id, file_id, local_fname, config):
         The coffee brewing log data downloaded from the Box folder
 
     """
-    logger = logging.getLogger(__name__ + '.download_file')
-
     # Get the file's metadata for logging purposes
     log_file = client.with_as_user_header(
         user_id=config['user_id']
@@ -159,7 +156,7 @@ def download_file(client, user_id, file_id, local_fname, config):
         '%Y-%m-%d %I:%M%p'
     )
 
-    logger.info('Downloading file "%s" (file ID: %s), uploaded to Box at %s',
+    logger.info('Downloading file "{}" (file ID: {}), uploaded to Box at {}',
                 log_file.name,
                 file_id,
                 str(upload_time))
@@ -173,7 +170,7 @@ def download_file(client, user_id, file_id, local_fname, config):
             log_stream
         )
 
-    logger.info('Downloaded file ID: %s as "%s"!',
+    logger.info('Downloaded file ID: {} as "{}"!',
                 file_id,
                 local_fname)
 
@@ -194,8 +191,6 @@ def rename_file(client, user_id, file_id, new_fname, config):
     None
 
     """
-    logger = logging.getLogger(__name__ + '.rename_file')
-
     # Get the file's metadata for logging purposes
     file = client.with_as_user_header(
         user_id=config['user_id']
@@ -210,7 +205,7 @@ def rename_file(client, user_id, file_id, new_fname, config):
         '%Y-%m-%d %I:%M%p'
     )
 
-    logger.info('Renaming file "%s" (file ID: %s), uploaded to Box at %s',
+    logger.info('Renaming file "{}" (file ID: {}), uploaded to Box at {}',
                 file.name,
                 file_id,
                 str(upload_time))
@@ -223,7 +218,7 @@ def rename_file(client, user_id, file_id, new_fname, config):
         name=new_fname
     )
 
-    logger.info('Renamed file ID: %s from "%s" to "%s"!',
+    logger.info('Renamed file ID: {} from "{}" to "{}"!',
                 file_id,
                 file.name,
                 new_fname)
@@ -232,8 +227,6 @@ def rename_file(client, user_id, file_id, new_fname, config):
 def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
                     timestamp=None):
     """Update the copy of the logging file stored in the Box folder."""
-    logger = logging.getLogger(__name__ + '.upload_log_file')
-
     slack_url = 'https://hooks.slack.com/services/' + config['slack_webhook']
 
     if timestamp is None:
@@ -244,7 +237,7 @@ def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
         )
 
     try:
-        logger.info('Updating existing log file %s in Box folder %s...',
+        logger.info('Updating existing log file {} in Box folder {}...',
                     file_id,
                     folder_id)
 
@@ -261,7 +254,7 @@ def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
 
     except BoxAPIError as e:
         if e.message == 'Not Found':
-            logger.warning('Log file missing from folder %s! '
+            logger.warning('Log file missing from folder {}! '
                            'Attempting to upload the log as a new file... '
                            '(Check for a Slack notification containing the '
                            'file ID of the newly uploaded log file)',

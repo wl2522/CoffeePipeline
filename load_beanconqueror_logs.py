@@ -6,7 +6,6 @@ import argparse
 import atexit
 import functools
 import json
-import logging
 import re
 import shutil
 import sys
@@ -16,6 +15,7 @@ from zipfile import ZipFile
 import pandas as pd
 import sqlite3
 from box_sdk_gen import BoxClient, BoxJWTAuth, JWTConfig
+from loguru import logger
 from pytz import timezone
 from yaml import safe_load
 
@@ -37,30 +37,21 @@ DATESTAMP = datetime.now(UTC).astimezone(
     '%Y-%m-%d %I:%M%p'
 )
 
-main_logger = logging.Logger(name='main_logger')
-main_logger.setLevel(logging.INFO)
-
-print_handler = logging.StreamHandler(stream=sys.stdout)
-file_handler = logging.FileHandler(
-    filename=config['beanconqueror']['logging_fname'],
-    mode='a'
+logger.add(
+    config['beanconqueror']['logging_fname'],
+    mode='a',
+    delay=True,
+    rotation=config['log_rotation'],
+    retention=config['log_retention']
 )
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-
-print_handler.setFormatter(formatter)
-file_handler.setFormatter(formatter)
-main_logger.addHandler(print_handler)
-main_logger.addHandler(file_handler)
 
 
 def unzip_file(file_name):
     """Extract the given ZIP file and save it as a JSON file
     """
-    main_logger.info("Unzipping downloaded file %s and saving it as name %s",
-                     config['beanconqueror']['local_fname'],
-                     file_name)
+    logger.info("Unzipping downloaded file {} and saving it as name {}",
+                config['beanconqueror']['local_fname'],
+                file_name)
 
     # Read the ZIP file and write the contents to a JSON file simultaneously
     with ZipFile(config['beanconqueror']['local_fname'], 'r') as zip_file:
@@ -219,8 +210,6 @@ def insert_dfs_to_tables(dfs, create_script_fname, conn=None, db_name=None):
     """Insert the dictionary of pandas dataframes exported from the Beanconqueror
     app into SQL tables.
     """
-    logger = logging.getLogger(__name__ + '.insert_dfs_to_tables')
-
     if conn is None:
         conn = sqlite3.connect(db_name)
 
@@ -230,7 +219,7 @@ def insert_dfs_to_tables(dfs, create_script_fname, conn=None, db_name=None):
         conn.commit()
 
     for name, df in dfs.items():
-        logger.info("Updating table %s",
+        logger.info("Updating table {}",
                     f'beanconqueror_{name}')
 
         df.to_sql(
@@ -244,8 +233,6 @@ def insert_dfs_to_tables(dfs, create_script_fname, conn=None, db_name=None):
 def preprocess_data(df_dict):
     """
     """
-    logger = logging.getLogger(__name__ + '.preprocess_data')
-
     # Join the dataframes into a single log table
     logs = df_dict['brews'].merge(
         df_dict['beans'].rename({
@@ -359,12 +346,13 @@ def preprocess_data(df_dict):
     # Validate only the grind settings column
     # (because non-missing scores from the app must be integer values from 1-5)
     for grinder in logs['grinder'].unique():
-        logger.info("Validating grind setting values for grinder %s", grinder)
+        logger.info("Validating grind setting values for grinder {}",
+                    grinder)
 
         grinder_name = re.sub(r'\s+|-', '_', grinder.lower())
 
         if grinder_name not in config['grind_setting_ranges']:
-            logger.error("Grind settings range not set for grinder %s!",
+            logger.error("Grind settings range not set for grinder {}!",
                          grinder)
 
             raise ValueError
@@ -412,8 +400,8 @@ if __name__ == '__main__':
         user_id=config['app_user_id']
     )
 
-    main_logger.info('Successfully authenticated as Box API app user "%s"!',
-                     app_user.name)
+    logger.info('Successfully authenticated as Box API app user "{}"!',
+                app_user.name)
 
     sys.excepthook = functools.partial(
         catch_exception,
@@ -494,7 +482,7 @@ if __name__ == '__main__':
         fname=config['beanconqueror']['local_fname']
     )
 
-    main_logger.info('Pipeline finished running!')
+    logger.info('Pipeline finished running!')
 
     # Upload the log file to Box whenever the script terminates
     atexit.register(

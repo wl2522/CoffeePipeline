@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS raw_logs (
     Coffee VARCHAR(16),
     "Score (out of 5)" INT,
     Bean VARCHAR(32),
+    Grinder VARCHAR(32),
     Grind INT,
     Flavor VARCHAR(32),
     Balance VARCHAR(32)
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS coffee_logs (
     coffee_grams INT,
     score INT,
     bean VARCHAR(32),
+    grinder VARCHAR(32),
     grind INT,
     flavor VARCHAR(32),
     balance VARCHAR(32)
