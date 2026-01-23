@@ -8,4 +8,5 @@ INSERT OR REPLACE INTO coffee_logs
         Grind AS grind,
         Flavor AS flavor,
         Balance AS balance
-    FROM raw_logs;
+    FROM raw_logs
+    ORDER BY Timestamp DESC;

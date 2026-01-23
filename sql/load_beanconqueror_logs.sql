@@ -19,4 +19,6 @@ INSERT OR REPLACE INTO beanconqueror_logs
         method_of_preparation_tools,
         favourite,
         best_brew
-    FROM beanconqueror_logs_tmp;
+    FROM beanconqueror_logs_tmp
+    ORDER BY updated_at DESC,
+        UUID;

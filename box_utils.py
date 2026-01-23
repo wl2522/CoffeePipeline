@@ -24,10 +24,14 @@ def catch_exception(err_type, value, trace, config, client, user,
     # Extract the error message from the exception traceback
     error_msg = traceback.format_exception_only(err_type, value)[0]
 
-    fail_notif = {"status": "FAIL",
-                  "message": f"Failed to update {config['db_name']}!",
-                  "error": error_msg.replace('\n', '')
-                  }
+    fail_notif = {
+        "status": "FAIL",
+        "message": "The {} pipeline failed to update {}!".format(
+            log_filename.replace('.log', ''),
+            config['db_name']
+        ),
+        "error": error_msg.replace('\n', '')
+    }
     fail_msg = f'"{timestamp}": `{str(fail_notif)}`'
 
     slack_url = 'https://hooks.slack.com/services/' + config['slack_webhook']
