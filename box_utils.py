@@ -11,7 +11,7 @@ from box_sdk_gen.managers.uploads import (PreflightFileUploadCheckParent,
 from pytz import timezone
 
 
-def catch_exception(err_type, value, trace, config, client, user,
+def catch_exception(err_type, value, trace, config, client, user_id,
                     log_folder_id, log_file_id, log_filename, timestamp=None):
     """Report any exceptions that were raised during the pipeline run."""
     if timestamp is None:
@@ -48,7 +48,7 @@ def catch_exception(err_type, value, trace, config, client, user,
                  error_msg)
 
     upload_log_file(client=client,
-                    user_id=user,
+                    user_id=user_id,
                     folder_id=log_folder_id,
                     file_id=log_file_id,
                     config=config,
@@ -241,9 +241,10 @@ def upload_log_file(client, user_id, folder_id, file_id, log_fname, config,
         )
 
     try:
-        logger.info('Updating existing log file {} in Box folder {}...',
+        logger.info('Updating existing log file {} in Box folder {} with local file {}',
                     file_id,
-                    folder_id)
+                    folder_id,
+                    log_fname)
 
         with open(log_fname, 'rb') as f:
             log_stream = f.read()

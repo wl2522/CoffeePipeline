@@ -2,7 +2,6 @@
 Beanconqueror app.
 
 """
-import argparse
 import atexit
 import functools
 import json
@@ -383,15 +382,6 @@ def preprocess_data(df_dict):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--rename-log-file',
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help=("Rename the Beanconqueror log file saved in Box at the end of "
-              "the pipeline to avoid having duplicate file names")
-    )
-
     # Authenticate using JWTAuth credentials stored in a JSON file
     jwt_config = JWTConfig.from_config_file(config['auth_fname'])
     auth = BoxJWTAuth(config=jwt_config)
@@ -407,7 +397,7 @@ if __name__ == '__main__':
         catch_exception,
         config=config,
         client=session_client,
-        user=app_user,
+        user_id=config['user_id'],
         log_folder_id=config['beanconqueror']['folder_id'],
         log_file_id=config['beanconqueror']['log_file_id'],
         log_filename=config['beanconqueror']['logging_fname'],

@@ -167,7 +167,7 @@ if __name__ == '__main__':
         catch_exception,
         config=config,
         client=session_client,
-        user=app_user,
+        user_id=config['user_id'],
         log_folder_id=config['coffee_guru']['folder_id'],
         log_file_id=config['coffee_guru']['log_file_id'],
         log_filename=config['coffee_guru']['logging_fname'],
