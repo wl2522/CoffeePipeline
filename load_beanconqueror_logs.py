@@ -419,6 +419,19 @@ if __name__ == '__main__':
         config=config
     )
 
+    # Rename the file in Box to avoid having duplicate file names appended with a suffix
+    new_fname = config['beanconqueror']['local_fname'].replace(
+        '.zip',
+        f'_{DATESTAMP}.zip'
+    )
+    rename_file(
+        client=session_client,
+        user_id=config['user_id'],
+        file_id=log_file_id,
+        new_fname=new_fname,
+        config=config
+    )
+
     json_fname = config['beanconqueror']['local_fname'].replace('.zip', '.json')
 
     unzip_file(json_fname)
@@ -452,19 +465,6 @@ if __name__ == '__main__':
         sql_conn.commit()
 
     sql_conn.close()
-
-    # Rename the file in Box to avoid having duplicate file names
-    new_fname = config['beanconqueror']['local_fname'].replace(
-        '.zip',
-        f'_{DATESTAMP}.zip'
-    )
-    rename_file(
-        client=session_client,
-        user_id=config['user_id'],
-        file_id=log_file_id,
-        new_fname=new_fname,
-        config=config
-    )
 
     send_slack_notification(
         timestamp=DATESTAMP,
